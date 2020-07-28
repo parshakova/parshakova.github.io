@@ -16,7 +16,7 @@ I am now pursuing a Ph.D. in Computational & Mathematical Engineering at Stanfor
 This summer I am interning at Apple Inc. under the supervision of Saman Ghili, Exploratory Design team, where we look at new optimization schemes for Neural Networks. 
 
 <br />
-During the first year of a Ph.D. program I was a part of a research rotation at Stanford. Specifically, I worked with <a href="https://me.stanford.edu/people/eric-darve" target="_blank">Prof. Eric Darve</a>  on deriving bounds on the number of neurons and layers of Relu NN necessary for approximate any analytic function arbitrarily close. Also with <a href="https://web.stanford.edu/~lexing/" target="_blank">Prof. Lexing Ying</a> we explored a layerwise Hamiltonian for NN and using Hamilton-Jacobi-Bellman equation to approach the delayed gradient problem to decouple layers during the back propagation.
+During the first year of a Ph.D. program I was a part of a research rotation at Stanford. Specifically, I worked with <a href="https://me.stanford.edu/people/eric-darve" target="_blank">Prof. Eric Darve</a>  on deriving bounds on the number of neurons and layers of Relu NN necessary for approximate any analytic function arbitrarily close. Also with <a href="https://web.stanford.edu/~lexing/" target="_blank">Prof. Lexing Ying</a> we explored a layerwise Hamiltonian for NN to decouple layers during the back propagation.
 
 
 <br />
