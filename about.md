@@ -5,18 +5,17 @@ description: Tanya's page
 tags: [Jekyll, theme, responsive, blog, template]
 ---
 
-My primary research objective is to develop novel learning algorithms using techniques from optimization and statistics, to bring theoretical guarantees about the convergence of iterative methods and the quality of the produced solutions, and to obtain the control models in the approximate dynamical system environments.  
+My primary research objective is to develop novel learning algorithms using techniques from optimization, discrete mathematics and statistics, to analyse and to bring theoretical guarantees about these methods.
 
 
 <br />
-I am now pursuing a Ph.D. in Computational & Mathematical Engineering at Stanford University. 
-
-
-<br />
-This summer I am interning at Apple Inc. under the supervision of Saman Ghili, Exploratory Design team, where we look at new optimization schemes for Neural Networks. 
+I am now pursuing a Ph.D. in <a href="https://icme.stanford.edu" target="_blank">Computational & Mathematical Engineering</a> at Stanford University. 
 
 <br />
-During the first year of a Ph.D. program I was a part of a research rotation at Stanford. Specifically, I worked with <a href="https://me.stanford.edu/people/eric-darve" target="_blank">Prof. Eric Darve</a>  on deriving bounds on the number of neurons and layers of Relu NN necessary to approximate any analytic function arbitrarily close. Also with <a href="https://web.stanford.edu/~lexing/" target="_blank">Prof. Lexing Ying</a> we explored a layerwise Hamiltonian for NN to decouple layers during the back propagation.
+During the first two years of a Ph.D. program I was a part of a research rotation at Stanford. Specifically, I worked with <a href="https://me.stanford.edu/people/eric-darve" target="_blank">Prof. Eric Darve</a>  on deriving bounds on the number of neurons and layers of Relu NN necessary to approximate any analytic function arbitrarily close, with <a href="https://web.stanford.edu/~lexing/" target="_blank">Prof. Lexing Ying</a> on layerwise Hamiltonian for NN to decouple layers during the back propagation, with <a href="http://web.stanford.edu/~montanar/" target="_blank">Prof. Andrea Montanari</a> on estimating invariant features across multiple training distributions, with <a href="https://web.stanford.edu/~saberi/" target="_blank">Prof. Amin Saberi</a> on approximation algorithms for card guessing problem, with <a href="https://tselilschramm.org" target="_blank">Prof. Tselil Schramm</a> on minimum dimension graph embedding.
+
+<br />
+Last summer I did internship at Apple Inc. under the supervision of Saman Ghili, Exploratory Design team, where we look at new optimization schemes for Neural Networks. 
 
 
 <br />
