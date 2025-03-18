@@ -17,7 +17,6 @@ social: true  # includes social icons at the bottom of the page
 
 
 I am a postdoctoral scientist at Amazon working with <a href="https://scholar.google.com/citations?user=7KI2Fa8AAAAJ&hl=en" target="_blank">Garrett van Ryzin</a>. 
-I am also visiting <a href="https://www.vandijklab.org" target="_blank">van Dijk Lab</a> at Yale.
 
 
 My primary research objective is to develop efficient algorithms for computational problems using techniques from optimization, discrete mathematics and statistics.
