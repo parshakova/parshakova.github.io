@@ -31,7 +31,7 @@ I received my Ph.D. in
 <a href="https://icme.stanford.edu" target="_blank">Computational Mathematics</a> at Stanford, 
 where I was fortunate to be advised by <a href="https://stanford.edu/~boyd/" target="_blank">Stephen Boyd</a>.
 Prior to my Ph.D., I received Bachelor's in <a
-href="http://id.kaist.ac.kr/index.php?document_srl=21142&mid=rnews"
+href="https://id.kaist.ac.kr/home"
 target="_blank">Industrial Design</a> and Master's in <a
 href="https://ee.kaist.ac.kr/en/" target="_blank">Electrical
 Engineering</a> at KAIST.
@@ -44,4 +44,18 @@ Engineering</a> at KAIST.
 
 
     
-<center><strong><a href="https://scholar.google.com/citations?user={{ site.scholar_userid }}" title="Google Scholar"> <i class="ai ai-google-scholar" style="font-size: 4em;"></i> </a></strong>  <span style="font-size: 1.5em;">💙💛</span>  <strong><a href="https://github.com/{{ site.github_username }}" title="GitHub"> <i class="fa-brands fa-github" style="font-size: 4em;"></i> </a></strong></center>
+<div style="display: flex; justify-content: center; align-items: center; gap: 20px;">
+  <strong>
+    <a href="https://scholar.google.com/citations?user={{ site.scholar_userid }}" title="Google Scholar">
+      <i class="ai ai-google-scholar" style="font-size: 4em;"></i>
+    </a>
+  </strong>
+  <a href="https://standforukraine.com" title="Stand for Ukraine" style="text-decoration: none;">
+    <span style="font-size: 1.8em; vertical-align: top;">💙💛</span>
+  </a>
+  <strong>
+    <a href="https://github.com/{{ site.github_username }}" title="GitHub">
+      <i class="fa-brands fa-github" style="font-size: 3.75em;"></i>
+    </a>
+  </strong>
+</div>
