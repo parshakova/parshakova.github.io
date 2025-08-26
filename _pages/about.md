@@ -16,7 +16,8 @@ social: true  # includes social icons at the bottom of the page
 ---
 
 
-I am a postdoctoral scientist at Amazon working with <a href="https://scholar.google.com/citations?user=7KI2Fa8AAAAJ&hl=en" target="_blank">Garrett van Ryzin</a>. 
+I am a post-doc at the <a href="https://www.simonsfoundation.org/flatiron/center-for-computational-mathematics/" target="_blank">Flatiron Institute</a>, 
+Center for Computational Mathematics. 
 
 
 My primary research objective is to develop efficient algorithms for computational problems using techniques from optimization, discrete mathematics and statistics.
