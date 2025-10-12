@@ -12,8 +12,7 @@ footer_text: >
 
 keywords: jekyll, jekyll-theme, academic-website, portfolio-website  # add your own keywords or leave empty
 
-lang: en # the language of your site (for example: en, fr, cn, ru, etc.)
-icon: /assets/img/full-moon-with-face.png  # the emoji used as the favicon (alternatively, provide image name in /assets/img/)
+
 
 url: https://parshakova.github.io # the base hostname & protocol for your site
 baseurl: 
@@ -92,7 +91,7 @@ unsplash_id: # your unsplash id
 instagram_id: # your instagram id
 facebook_id: # your facebook id
 youtube_id: # your youtube channel id (youtube.com/@<youtube_id>)
-discord_id: # your discord id (18-digit unique numerical identifier)
+icon: "/assets/img/full-moon.ico"
 
 contact_note: >
 
@@ -178,7 +177,7 @@ kramdown:
       line_numbers: false
     block:
       line_numbers: false
-      start_line: 1
+
 
 # Includes & excludes
 include: ['_pages']
