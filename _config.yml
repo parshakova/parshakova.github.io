@@ -178,6 +178,12 @@ kramdown:
     block:
       line_numbers: false
 
+# Sass/SCSS
+sass:
+  quiet_deps: true
+  sass_dir: _sass
+  style: compressed
+
 
 # Includes & excludes
 include: ['_pages']
