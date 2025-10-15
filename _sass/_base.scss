@@ -16,6 +16,7 @@ hr {
 table {
   td, th {
     color: var(--global-text-color);
+    vertical-align: top;
   }
   td {
     font-size: 1rem;
