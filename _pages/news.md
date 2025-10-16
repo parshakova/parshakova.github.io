@@ -71,7 +71,7 @@ nav_order: 0
 		<td>🎤</td>
 		<td></td>
 		<td></td>
-		<td><b>Oct&nbsp;29,&nbsp;2024</b></td>
+		<td><b>Oct&nbsp;21,&nbsp;2024</b></td>
 		<td></td>
 		<td></td>
 		<td>Talk at <a href="https://submissions.mirasmart.com/InformsAnnual2024/Itinerary/PresentationDetail.aspx?evdid=8500">INFORMS</a>: <em>Price Directed Distributed Optimization and Primal Recovery.</em><br/><a href="../assets/pdf/talk_informs_24.pdf" class="btn btn-sm z-depth-0" role="button">Slides</a></td>
@@ -80,7 +80,7 @@ nav_order: 0
 		<td>📚</td>
 		<td></td>
 		<td></td>
-		<td><b>Jul&nbsp;7,&nbsp;2024</b></td>
+		<td><b>Jul&nbsp;8,&nbsp;2024</b></td>
 		<td></td>
 		<td></td>
 		<td>Started post-doc at Amazon SCOT.</td>
