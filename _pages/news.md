@@ -13,6 +13,26 @@ nav_order: 0
 
 <table style="border-collapse: separate; border-spacing: 0.25em 1.4em;">
 	<tr>
+		<td>🎤</td>
+		<td></td>
+		<td></td>
+		<td><b>Apr&nbsp;30,&nbsp;2026</b></td>
+		<td></td>
+		<td></td>
+		<td>Talk at <a href="https://isl.stanford.edu/talks/talk-schedule/spring-2026-tetiana-parshakova/">Stanford ISL Colloquium</a>: <em>Muon Does Not Converge on Convex
+Lipschitz Functions.</em><br/><a href="../assets/pdf/nonsmooth_muon_slides.pdf" class="btn btn-sm z-depth-0" role="button">Slides</a></td>
+	</tr>
+	<tr>
+		<td>🎤</td>
+		<td></td>
+		<td></td>
+		<td><b>Apr&nbsp;29,&nbsp;2026</b></td>
+		<td></td>
+		<td></td>
+		<td>Talk at Apple Exploratory Design Group: <em>Muon Does Not Converge on Convex
+Lipschitz Functions.</em><br/></td>
+	</tr>
+	<tr>
 		<td>🚀</td>
 		<td></td>
 		<td></td>

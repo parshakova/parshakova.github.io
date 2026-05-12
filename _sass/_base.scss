@@ -38,8 +38,10 @@ a, table.table a {
 a.btn {
   color: var(--global-text-color) !important;
   border: 1px solid var(--global-text-color) !important;
-  padding: 0.2rem 0.75rem !important;
-  font-size: 0.75rem;
+  padding: 0.3rem 0.5rem !important;
+  font-size: 0.55rem !important;
+  line-height: 1.2 !important;
+  text-transform: lowercase !important;
   text-decoration: none !important;
   &:hover {
     color: var(--global-theme-color) !important;
@@ -488,6 +490,29 @@ blockquote {
     margin-top: 2rem;
     margin-bottom: -2rem;
     text-align: right;
+  }
+  .year-section {
+    position: relative;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--global-divider-color);
+  }
+  .year-section .year {
+    position: absolute;
+    left: -4rem;
+    top: 1.25rem;
+    width: 3rem;
+    color: var(--global-theme-color);
+    font-size: 1rem;
+    text-align: right;
+  }
+  @media (max-width: 992px) {
+    .year-section .year {
+      position: static;
+      width: auto;
+      text-align: left;
+      margin-bottom: 0.5rem;
+    }
   }
   ol.bibliography {
     list-style: none;
