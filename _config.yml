@@ -253,7 +253,7 @@ display_tags: ['formatting', 'images', 'links', 'math', 'code'] # this tags will
 scholar:
 
   last_name: [Parshakova]
-  first_name: [Tetiana]
+  first_name: [Tetiana, T.]
 
   style: apa
   locale: en
