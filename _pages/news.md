@@ -16,6 +16,15 @@ nav_order: 0
 		<td>🎤</td>
 		<td></td>
 		<td></td>
+		<td><b>Jun&nbsp;25,&nbsp;2026</b></td>
+		<td></td>
+		<td></td>
+		<td>Talk at CERN Alumni &amp; Flatiron New York: <em>Structured Gradient Methods for Deep Learning.</em><br/><a href="../assets/pdf/talk_cern_26.pdf" class="btn btn-sm z-depth-0" role="button">Slides</a></td>
+	</tr>
+	<tr>
+		<td>🎤</td>
+		<td></td>
+		<td></td>
 		<td><b>Apr&nbsp;30,&nbsp;2026</b></td>
 		<td></td>
 		<td></td>
