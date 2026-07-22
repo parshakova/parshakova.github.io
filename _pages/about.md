@@ -21,11 +21,11 @@ Center for Computational Mathematics.
 
 My primary research objective is to develop efficient algorithms for computational problems using techniques from optimization, discrete mathematics and statistics.
 In particular, my research interests include
-* large-scale and distributed convex optimization,
-* network science, learning and inference for network data,
+* optimization for training large language models,
 * numerical and randomized linear algebra,
-* low rank and structured optimization,
-* machine learning.
+* large-scale and distributed convex optimization,
+* learning and inference on network data,
+* low-rank and structured optimization.
 
 I received my Ph.D. in 
 <a href="https://icme.stanford.edu" target="_blank">Computational Mathematics</a> at Stanford, 
