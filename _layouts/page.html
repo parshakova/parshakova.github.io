@@ -5,11 +5,17 @@ layout: default
         <div class="post">
 
           <header class="post-header">
+            {%- if page.category %}
+            <h1 class="project-title">{{ page.title }}</h1>
+            {%- if page.description %}
+            <p class="project-subtitle">{{ page.description }}</p>
+            {%- endif %}
+            {%- endif %}
             <!-- <h1 class="post-title">{{ page.title }}</h1>
             <p class="post-description">{{ page.description }}</p> -->
           </header>
 
-          <article>
+          <article {% if page.category %}class="project-page"{% endif %}>
             {{ content }}
           </article>
 

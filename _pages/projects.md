@@ -4,7 +4,7 @@ title: design
 permalink: /design/
 description: 
 nav: true
-nav_order: 2
+nav_order: 3
 display_categories: [human computer interaction, design]
 horizontal: false
 ---

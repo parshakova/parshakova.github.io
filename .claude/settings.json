@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:nikhilgsh.github.io)",
+      "Bash(pkill -f \"jekyll serve\")",
+      "Bash(grep -o \"navbar-brand[^>]*>.\\\\{0,160\\\\}\" _site/index.html)",
+      "Bash(lsof -nP -iTCP:4000 -iTCP:35729 -sTCP:LISTEN)",
+      "Bash(python3 -c ' *)",
+      "Bash(gem contents *)",
+      "Bash(awk '{print $5, $9}')",
+      "Bash(python3 -c \"import fitz; print\\('pymupdf', fitz.__doc__\\)\")",
+      "Bash(python3 -c \"import PIL; print\\('pillow', PIL.__version__\\)\")",
+      "WebFetch(domain:cdn.jsdelivr.net)",
+      "Bash(cp /Users/tparshakova/Documents/projects/polora_website/index.html polora/index.html)",
+      "Bash(cp /Users/tparshakova/Documents/projects/polora_website/assets/*.svg polora/assets/)",
+      "Bash(shasum polora/index.html /Users/tparshakova/Documents/projects/polora_website/index.html)",
+      "Bash(shasum _site/polora/index.html polora/index.html)"
+    ]
+  }
+}

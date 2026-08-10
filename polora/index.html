@@ -1,0 +1,2399 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="PoLoRA optimizes the LoRA product with a curvature-preconditioned spectral direction and explicit magnitude control.">
+  <meta name="theme-color" content="#ffffff">
+  <!-- Favicon as an inline SVG data URI: the emoji is drawn by the reader's own
+       emoji font, so the tab icon needs no binary asset and the page stays a
+       single self-contained file. A single codepoint (U+2744) rather than the
+       polar-bear ZWJ sequence, which degrades to a plain brown bear wherever
+       the sequence is unsupported and reads as a smudge at favicon size. -->
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='50' text-anchor='middle' dominant-baseline='central' font-size='88'%3E%E2%9D%84%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <script>
+    // Runs before first paint so a dark-mode reader never sees a white flash.
+    // An explicit choice wins; otherwise follow the operating system. Only
+    // "dark" and "light" count as a choice: a site sharing this origin and
+    // this storage key may also write "system", which means follow the OS.
+    (function () {
+      try {
+        var saved = localStorage.getItem("theme");
+        var dark =
+          saved === "dark"
+            ? true
+            : saved === "light"
+              ? false
+              : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        if (dark) document.documentElement.setAttribute("data-theme", "dark");
+      } catch (e) {}
+    })();
+  </script>
+  <title>PoLoRA: A Preconditioned Orthogonalized LoRA Optimizer</title>
+  <style>
+    :root {
+      --paper: #ffffff;
+      --paper-2: #f8f9fb;
+      --ink: #131416;
+      --muted: #5a5c63;
+      --line: #e3e4e8;
+      --blue: #2757dd;
+      --blue-soft: #eef2fe;
+      --green: #3f7d33;
+      --green-soft: #edf6ea;
+      --coral: #872ee0;
+      --coral-soft: #f4ecfd;
+      --gold: #6b6f76;
+      --gold-soft: #f8f9fb;
+      --white: #ffffff;
+      /* Surfaces, split out from --ink/--white so dark mode can move a card
+         background without dragging the text colour along with it. */
+      --surface: #ffffff;
+      /* Soft charcoal rather than near-black: these panels (equation cards,
+         the algorithm box, the result strip, the footer) sit on a white page,
+         and a #131416 fill made every one of them glare. */
+      --panel: #1f2329;
+      --panel-2: #191c21;
+      --panel-fg: #ffffff;
+      --blue-hover: #0a4bff;
+      /* Figure cards stay light in both themes because the SVGs carry black
+         text; dark mode dims the card instead of inverting the artwork. */
+      --figure-bg: #ffffff;
+      /* CARD SURFACES (equation cards, the algorithm box, the product
+         diagram, the result strip). These used to be white-on-near-black in
+         BOTH themes, which made them glaring islands on the light page. In
+         light mode they are now a tinted light panel with dark ink; the dark
+         theme below keeps the original values, so dark mode is unchanged.
+         Anything drawn inside a card must use these tokens rather than a
+         literal white/#5ca5ff, or it will be invisible in one theme. */
+      --card-bg: #eef2fe;
+      --card-bg-2: #e6ecfb;
+      --card-fg: #131416;
+      --card-muted: #55585f;
+      --card-line: #d4ddf8;
+      /* Tints of --blue over white, so the cards sit in the same family as the
+         Principles box (--blue-soft, which --card-bg matches exactly). The
+         inset must stay LIGHTER than --card-bg/--card-bg-2, matching dark
+         mode, where the inset is a translucent white lift over the card.
+         Darkening it instead inverts the relationship between the two
+         themes. */
+      --card-inset: #f6f8fe;
+      --card-accent: #2757dd;
+      --card-accent-fg: #ffffff;
+      --card-accent-soft: rgba(39, 87, 221, 0.10);
+      --card-accent-2: #872ee0;
+      --pd-fill-frozen: rgba(19, 20, 22, 0.05);
+      --pd-stroke-frozen: rgba(19, 20, 22, 0.34);
+      --pd-fill-merged: rgba(19, 20, 22, 0.09);
+      --pd-stroke-merged: rgba(19, 20, 22, 0.5);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.05);
+      --body-width: 820px;
+      --wide-width: 1120px;
+    }
+
+    /* Dark palette: Furo's dark-theme values, mapped onto the same tokens.
+       Set on <html> by the inline script in the head, so it applies before
+       first paint and never flashes light. */
+    :root[data-theme="dark"] {
+      --paper: #131416;
+      --paper-2: #1a1c1e;
+      --surface: #1a1c1e;
+      --ink: #cfd0d0;
+      --muted: #9ca0a5;
+      --line: #303335;
+      --blue: #5ca5ff;
+      --blue-hover: #8cc2ff;
+      --blue-soft: #17233a;
+      --green: #7fbf6a;
+      --green-soft: #17251a;
+      --coral: #b27aeb;
+      --coral-soft: #241a33;
+      --gold: #81868d;
+      --gold-soft: #1a1c1e;
+      --panel: #202327;
+      --panel-2: #1a1c1e;
+      /* Just off white: the figures keep black SVG text, so this cannot go
+         dark, and pure white glares against the dark page. Do not push below
+         roughly #b0b6bd or the black text in the SVGs starts to lose
+         contrast. */
+      --figure-bg: #f4f6f9;
+      /* Card surfaces: the original white-on-dark values, so switching the
+         light theme to light cards left dark mode untouched. */
+      --card-bg: #202327;
+      --card-bg-2: #1a1c1e;
+      --card-fg: #ffffff;
+      --card-muted: rgba(255, 255, 255, 0.72);
+      --card-line: rgba(255, 255, 255, 0.14);
+      --card-inset: rgba(255, 255, 255, 0.06);
+      --card-accent: #5ca5ff;
+      --card-accent-fg: #0f1113;
+      --card-accent-soft: rgba(92, 165, 255, 0.12);
+      --card-accent-2: #b27aeb;
+      --pd-fill-frozen: rgba(255, 255, 255, 0.07);
+      --pd-stroke-frozen: rgba(255, 255, 255, 0.34);
+      --pd-fill-merged: rgba(255, 255, 255, 0.12);
+      --pd-stroke-merged: rgba(255, 255, 255, 0.5);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .theme-toggle {
+      display: inline-grid;
+      place-items: center;
+      width: 2.1rem;
+      height: 2.1rem;
+      padding: 0;
+      color: var(--ink);
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 0.95rem;
+      line-height: 1;
+    }
+
+    .theme-toggle:hover {
+      color: var(--blue);
+      border-color: var(--blue);
+    }
+
+    .theme-toggle .moon { display: none; }
+    :root[data-theme="dark"] .theme-toggle .sun { display: none; }
+    :root[data-theme="dark"] .theme-toggle .moon { display: block; }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--paper);
+      color: var(--ink);
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 18px;
+      line-height: 1.7;
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+      background: var(--paper);
+    }
+
+    a {
+      color: var(--blue);
+      text-underline-offset: 0.18em;
+      text-decoration-thickness: 0.08em;
+    }
+
+    a:hover { color: var(--blue-hover); }
+
+    a:focus-visible,
+    summary:focus-visible {
+      outline: 3px solid var(--coral);
+      outline-offset: 4px;
+      border-radius: 3px;
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* Greedy filling. `pretty` rebalances the closing lines of a paragraph and
+       leaves slack mid-line, which strands a trailing inline formula. */
+    p, li { text-wrap: wrap; }
+
+    /* build.py wraps inline math plus its trailing punctuation in this, so the
+       punctuation cannot be orphaned at the start of the next line. */
+    .nobr { white-space: nowrap; }
+
+    p { margin: 0 0 1.2rem; }
+
+    h1, h2, h3 {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-weight: 650;
+      line-height: 1.08;
+      letter-spacing: -0.025em;
+      text-wrap: balance;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4.6vw, 3.4rem);
+    }
+
+    h2 {
+      margin: 0 0 1.4rem;
+      font-size: clamp(1.7rem, 3.6vw, 2.6rem);
+    }
+
+    h3 {
+      margin: 2.25rem 0 0.8rem;
+      font-size: clamp(1.2rem, 2.4vw, 1.45rem);
+    }
+
+    code, pre, .mono, .eyebrow, .metric-label {
+      font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono", "Lucida Console", monospace;
+    }
+
+    .skip-link {
+      position: fixed;
+      z-index: 100;
+      top: 0.75rem;
+      left: 0.75rem;
+      padding: 0.6rem 0.9rem;
+      color: var(--panel-fg);
+      background: var(--panel);
+      transform: translateY(-180%);
+      transition: transform 140ms ease;
+    }
+
+    .skip-link:focus { transform: translateY(0); }
+
+    .topbar {
+      width: min(var(--wide-width), calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 1.1rem 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .wordmark {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      color: var(--ink);
+      font-weight: 760;
+      text-decoration: none;
+      letter-spacing: -0.02em;
+    }
+
+    /* The mark is an emoji, so it brings its own colour: no filled disc behind
+       it and no text colour to inherit, or the glyph sits in a blue hole. */
+    .wordmark-mark {
+      width: 1.85rem;
+      height: 1.85rem;
+      display: grid;
+      place-items: center;
+      font-size: 1.45rem;
+      line-height: 1;
+    }
+
+    .toplinks {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      font-size: 0.86rem;
+      font-weight: 700;
+    }
+
+    .toplinks a { color: var(--ink); }
+
+    /* The article's own measure, not --wide-width: the title, byline and
+       buttons are prose, and setting them wider than every section below left
+       the opening block hanging outside the column the reader then follows. */
+    .hero {
+      width: min(var(--body-width), calc(100% - 2rem));
+      margin: 0 auto;
+      padding: clamp(4rem, 10vw, 8rem) 0 3.2rem;
+    }
+
+    .eyebrow {
+      margin-bottom: 1.1rem;
+      color: var(--blue);
+      font-size: 0.78rem;
+      font-weight: 800;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+
+    .subtitle {
+      margin: 2rem 0 1.4rem;
+      color: var(--muted);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: clamp(1.15rem, 2.2vw, 1.55rem);
+      line-height: 1.4;
+    }
+
+    .authors {
+      margin: 0 0 2.1rem;
+      color: var(--muted);
+      font-size: 0.98rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0.65rem 1rem;
+      color: var(--panel-fg);
+      background: var(--panel);
+      border: 1px solid var(--panel);
+      border-radius: 999px;
+      font-size: 0.88rem;
+      font-weight: 750;
+      text-decoration: none;
+    }
+
+    /* Outlined rather than filled, so the paper stays the primary action --
+       but in the accent colour, since a neutral outline read as disabled and
+       the code link was being missed. */
+    .button.secondary {
+      color: var(--blue);
+      background: transparent;
+      border-color: var(--blue);
+    }
+
+    .button:hover {
+      color: var(--panel-fg);
+      background: var(--blue);
+      border-color: var(--blue);
+    }
+
+    .button.secondary:hover { color: var(--panel-fg); }
+
+    .result-strip {
+      width: min(var(--body-width), calc(100% - 2rem));
+      margin: 0 auto;
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 1fr;
+      overflow: hidden;
+      background: var(--card-bg);
+      border: 1px solid var(--card-line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    /* Centred rather than top-aligned: the value and its label are a single
+       block, and letting them sit against the top left the strip's lower half
+       empty. min-height is a floor for narrow viewports, where --metric-value
+       clamps down to 1.8rem and the cell would otherwise go squat; at full
+       size the content is taller than it and it never binds. */
+    .metric {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 112px;
+      padding: 1.15rem 1.35rem;
+      color: var(--card-fg);
+      border-right: 1px solid var(--card-line);
+    }
+
+    .metric:last-child { border-right: 0; }
+
+    .metric-value {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: clamp(1.8rem, 4vw, 2.7rem);
+      line-height: 1;
+    }
+
+    .metric-label {
+      display: block;
+      color: var(--card-muted);
+      font-size: 0.72rem;
+      line-height: 1.5;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* The TL;DR is set on the page's own measure, so it lines up with every
+       section below it instead of straddling the wider figure column. The
+       outline is lifted out of the flow into the left margin (see the media
+       query further down), which is what leaves the TL;DR the full width. */
+    .frontmatter {
+      position: relative;
+      width: min(var(--body-width), calc(100% - 2rem));
+      margin: 2rem auto 7rem;
+    }
+
+    .tldr {
+      padding: clamp(1.3rem, 3vw, 2rem);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+    }
+
+    .frontmatter h2 {
+      margin: 0 0 1rem;
+      font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono", "Lucida Console", monospace;
+      font-size: 0.82rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .tldr ul {
+      margin: 0;
+      padding-left: 1.3rem;
+    }
+
+    .tldr li + li { margin-top: 0.65rem; }
+
+    .tldr li::marker { color: var(--coral); }
+
+    /* The page's only outline, authored in header.html and standing in the
+       left margin the whole way down. Fixed (not sticky) so it stays put
+       regardless of which ancestor scrolls. `display: none` here is only the
+       default -- the width rules further down (search "HOW THE OUTLINE FOLLOWS
+       THE READER") turn it on, and that comment block is the one to read
+       before changing any of these numbers. Positioned against --wide-width,
+       not --body-width: wide sections are the widest thing that can sit beside
+       the pane, and sizing off the narrower --body-width let their left edge
+       creep under it. */
+    .side-toc {
+      --pane-width: 150px;
+      display: none;
+      position: fixed;
+      top: 7rem;
+      /* Centred in the margin: the leftover space beside the content, less the
+         pane itself, split evenly, so the gap to the window edge equals the gap
+         to the content. --body-width is the right measure because everything in
+         the article is set on it -- the hero, the result strip, the sections
+         and the figures. The exception is .section.wide, which is defined but
+         used nowhere; give a section that class and it will run under the pane,
+         so measure against --wide-width again if you ever do. */
+      left: max(1.5rem, calc(((100vw - var(--body-width)) / 2 - var(--pane-width)) / 2));
+      width: var(--pane-width);
+      max-height: calc(100vh - 9rem);
+      overflow-y: scroll;
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    /* The same mono label the TL;DR card uses, so the two frontmatter-level
+       headings read as a pair. Full ink against the muted links beneath it. */
+    .side-toc h2 {
+      margin: 0 0 0.9rem;
+      color: var(--ink);
+      font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono", "Lucida Console", monospace;
+      font-size: 0.82rem;
+      font-weight: 650;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .side-toc a {
+      display: block;
+      padding: 0.3rem 0 0.3rem 0.75rem;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    /* Numbered by counter rather than by list markers, because the marker box
+       sits outside the link and the link is what carries the active border.
+       The numbers have to be here at all: they are what the section headings'
+       "1." corresponds to. Each nested list resets its own counter, so the
+       sub-list under Experiments numbers from 1 like the old markup did. */
+    .side-toc ol {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      counter-reset: toc;
+    }
+
+    .side-toc ol > li { counter-increment: toc; }
+
+    .side-toc ol > li > a::before { content: counter(toc) ". "; }
+
+    .side-toc li > ol { padding-left: 0.9rem; }
+
+    .side-toc .toc-back {
+      margin: 0.75rem 0 0;
+      padding: 0.75rem 0 0;
+      border-top: 1px solid var(--line);
+      list-style: none;
+    }
+
+    .side-toc li > ol a {
+      font-size: 0.94em;
+      padding-top: 0.22rem;
+      padding-bottom: 0.22rem;
+    }
+
+    .side-toc a:hover { color: var(--ink); }
+
+    /* Colour and the rule alone, no weight change: bolding the active entry
+       reflowed its line and made the list twitch as the reader scrolled. */
+    .side-toc a.active {
+      color: var(--ink);
+      border-left-color: var(--blue);
+    }
+
+    /* HOW THE OUTLINE FOLLOWS THE READER -- read this before changing any
+       number below.
+       ------------------------------------------------------------------
+       There is one outline and it is on screen from the top of the page. No
+       script decides that any more; these two rules pick the pane or the
+       button purely by window width, so they never appear together.
+
+       The pane may not cover the centred content. It is centred in whatever
+       margin is left beside the 820px article, so each side of it gets
+       ((100vw - 820) / 2 - 150) / 2. Requiring at least 24px there is what
+       sets the single threshold below:
+
+         ((100vw - 820) / 2 - 150) / 2 >= 24  ->  100vw >= 1216px
+
+       1. >= 1216px: the pane stands in the left margin the whole way down.
+
+       2. below 1216px: the margin is too narrow to hold it, so the outline
+          becomes a panel opened by the floating "Outline" button. A click
+          instead of an always-open strip is the trade for having any
+          navigation at all on a small screen.
+
+       --wide-width is deliberately not involved: nothing in the article is
+       set on it any more (only the topbar and the footer, neither of which
+       sits beside the pane). */
+    @media (min-width: 1216px) {
+      .side-toc { display: block; }
+    }
+
+    .outline-fab {
+      display: none;
+      position: fixed;
+      z-index: 60;
+      right: 1rem;
+      bottom: 1rem;
+      padding: 0.6rem 1rem;
+      color: var(--panel-fg);
+      background: var(--panel);
+      border: 1px solid var(--panel);
+      border-radius: 999px;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      font-size: 0.82rem;
+      font-weight: 750;
+    }
+
+    @media (max-width: 1215px) {
+      .outline-fab { display: inline-flex; }
+
+      /* The same nav, re-anchored as a panel above the button. */
+      .side-toc.open {
+        display: block;
+        z-index: 55;
+        top: auto;
+        right: 1rem;
+        bottom: 4.25rem;
+        left: auto;
+        width: min(19rem, calc(100vw - 2rem));
+        max-height: min(60vh, 26rem);
+        padding: 1rem 1.15rem;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+      }
+    }
+
+    main { display: block; counter-reset: section-number; }
+
+    /* Numbered sections carry their number on the heading itself, so adding or
+       reordering a section renumbers the page with no edit to the markup. */
+    /* The last element's own bottom margin would stack on the section's
+       bottom padding, leaving up to 144px of blank space before the rule. */
+    .section > :last-child { margin-bottom: 0; }
+
+    .section.numbered { counter-increment: section-number; }
+
+    /* "1. Title". Flex with a baseline alignment so the number, set smaller
+       than the title, still sits on the title's baseline; the negative orders
+       put both pseudo-elements ahead of the anonymous flex item holding the
+       heading text. No column-gap: the stop has to sit tight against its own
+       number, so the space before the title comes from the stop's margin
+       instead. Every heading is plain text, so the title is one anonymous flex
+       item -- a heading with inline markup would still be one item, since
+       contiguous inline content is collected into a single anonymous box. */
+    .section.numbered h2 {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+    }
+
+    /* "1. Title": number and stop are one token in one pseudo-element, set in
+       the heading's own colour and size so the digit's cap-height matches the
+       title's capitals on their shared baseline. Scaled down they read as a
+       different, smaller thing sitting beside the title rather than as its
+       label -- the eye compares the two tops directly, so even a small
+       reduction shows.
+
+       The numbering exists because the frontmatter Outline and the side
+       outline are numbered lists whose entries the reader matches against
+       these headings; they mark themselves "1.", so the heading carries the
+       stop too and the two forms agree exactly. The stop also keeps the
+       number from running into the title.
+
+       Ink rather than the accent: accent is scarce here, marking the TL;DR
+       list and the claim tags, and a full stop after a number carries nothing
+       to point at. */
+    .section.numbered h2::before {
+      content: counter(section-number) ".";
+      order: -2;
+      margin-right: 0.28em;
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .section {
+      width: min(var(--body-width), calc(100% - 2rem));
+      margin: 0 auto;
+      padding: 4rem 0;
+      border-top: 1px solid var(--line);
+      scroll-margin-top: 1rem;
+    }
+
+    .section.wide { width: min(var(--wide-width), calc(100% - 2rem)); }
+
+
+    .math-scroll {
+      margin: 1.15rem 0;
+      padding: 0.2rem 0;
+      overflow-x: auto;
+      /* CSS forces the other axis to `auto` once one is, and MathJax's hidden
+         screen-reader MathML copy is absolutely positioned and taller than the
+         rendered equation, so tagged displays got a vertical scrollbar over
+         nothing visible. The visible math sizes the box, so clipping is safe. */
+      overflow-y: hidden;
+      color: var(--ink);
+      font-size: clamp(1rem, 2vw, 1.15rem);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .math-scroll mjx-container { min-width: max-content; }
+
+    /* MathJax gives display equations their own ~1.2em margin, which
+       stacked on the box margin above. */
+    .math-scroll mjx-container[display="true"] { margin: 0.3rem 0; }
+
+
+
+
+
+    .structure-map {
+      margin: 3rem 0 2.5rem;
+      padding: 1.25rem;
+      background: var(--card-bg);
+      border: 1px solid var(--card-line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .diagram-scroll {
+      margin: 0.25rem 0 1.5rem;
+      padding-bottom: 0.35rem;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .diagram-scroll svg {
+      display: block;
+      width: 100%;
+      min-width: 620px;
+      height: auto;
+    }
+
+    /* Product diagram palette. Drawn from the card tokens so the diagram
+       follows its card in both themes; print overrides it again below. */
+    /* Both row labels take the same accent: they mark the diagram's two rows,
+       not matrices, so colouring them differently implied a distinction that
+       is not there. Blue vs purple stays reserved for B vs A. */
+    .pd-eyebrow-1, .pd-eyebrow-2 { fill: var(--card-accent); }
+    .pd-txt { fill: var(--card-fg); }
+    .pd-op { fill: var(--card-muted); }
+    .pd-dim { fill: var(--card-muted); }
+    .pd-note { fill: var(--card-muted); }
+    .pd-note-em { fill: var(--card-fg); }
+    .pd-note-sm { fill: var(--card-muted); }
+    .pd-frozen { fill: var(--pd-fill-frozen); stroke: var(--pd-stroke-frozen); }
+    .pd-merged { fill: var(--pd-fill-merged); stroke: var(--pd-stroke-merged); }
+    .pd-b { fill: var(--card-accent-soft); stroke: var(--card-accent); }
+    .pd-a { fill: rgba(178,122,235,0.26); stroke: var(--card-accent-2); }
+    .pd-db { fill: url(#pd-hatch-b); stroke: var(--card-accent); }
+    .pd-da { fill: url(#pd-hatch-a); stroke: var(--card-accent-2); }
+    .pd-lbl-b { fill: var(--card-accent); }
+    .pd-lbl-a { fill: var(--card-accent-2); }
+    .pd-lbl-upd { fill: var(--card-fg); }
+    .pd-chip { fill: var(--card-bg); opacity: 0.88; }
+    .pd-rule { stroke: var(--card-line); }
+
+
+
+
+
+
+
+
+
+    .table-wrap {
+      margin: 2rem 0;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+      width: 100%;
+      min-width: 690px;
+      border-collapse: collapse;
+      background: var(--surface);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+
+    th, td {
+      padding: 0.8rem 0.9rem;
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid var(--line);
+    }
+
+    thead th {
+      color: var(--muted);
+      background: var(--paper-2);
+      font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono", "Lucida Console", monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.045em;
+      text-transform: uppercase;
+    }
+
+    tbody tr:last-child th,
+    tbody tr:last-child td { border-bottom: 0; }
+
+    tbody th { font-weight: 800; }
+
+    .check { color: var(--green); font-weight: 850; }
+    .partial { color: var(--gold); font-weight: 780; }
+    .no { color: var(--muted); }
+
+    /* Figures sit in the text column. Inside a section they take its full width
+       so they align with the prose exactly; a figure placed directly in the
+       article (the headline plot) clamps itself and keeps a side gutter. */
+    figure {
+      width: min(var(--body-width), calc(100% - 2rem));
+      margin: 3rem auto;
+      padding: clamp(0.75rem, 2vw, 1.25rem);
+      background: var(--figure-bg);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .section figure { width: 100%; }
+
+    /* Figures keep a white card in both themes, so their captions are pinned
+       dark rather than following --ink, which inverts in dark mode. */
+    figcaption {
+      max-width: 880px;
+      margin: 1rem auto 0.2rem;
+      color: #131416;
+      font-size: 0.84rem;
+      line-height: 1.55;
+    }
+
+    figcaption strong { color: #131416; }
+
+    .equation-card {
+      margin: 2.25rem 0;
+      padding: 1.25rem 1.4rem;
+      color: var(--card-fg);
+      background: var(--card-bg);
+      border: 1px solid var(--card-line);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .equation-card .label {
+      color: var(--card-accent);
+      font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono", "Lucida Console", monospace;
+      font-size: 0.82rem;
+      font-weight: 850;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .equation-card .math-scroll {
+      margin-bottom: 0.5rem;
+      color: var(--card-fg);
+      padding: 0.9rem 1rem;
+      background: var(--card-inset);
+      border-radius: 10px;
+    }
+
+    .equation-card ul {
+      list-style: none;
+      margin: 0.9rem 0 0;
+      padding: 0;
+    }
+
+    .equation-card li {
+      line-height: 1.65;
+    }
+
+    .equation-card li + li {
+      margin-top: 0.9rem;
+    }
+
+    /* A collapsible equation card: the summary carries the .label treatment, so
+       the closed state reads as a card heading rather than a disclosure widget. */
+    details.equation-card {
+      padding: 0;
+      border: 1px solid var(--card-line);
+    }
+
+    details.equation-card > summary {
+      padding: 1.25rem 1.4rem;
+      color: var(--card-accent);
+      font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono", "Lucida Console", monospace;
+      font-size: 0.82rem;
+      font-weight: 850;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    details.equation-card[open] > summary { padding-bottom: 0.9rem; }
+
+    details.equation-card .details-body { padding: 0 1.4rem 1.25rem; }
+
+    details.equation-card .details-body p { color: var(--card-muted); }
+
+
+
+
+
+
+    .algorithm {
+      max-width: var(--body-width);
+      margin: 2.5rem auto;
+      padding: clamp(1rem, 3vw, 1.75rem);
+      background: var(--card-bg-2);
+      border: 1px solid var(--card-line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .algorithm-head {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      margin-bottom: 1rem;
+      color: var(--card-fg);
+    }
+
+    .algorithm-head h3 { margin: 0; }
+
+    .algorithm-head span {
+      display: block;
+      color: var(--card-accent);
+      font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono", "Lucida Console", monospace;
+      font-size: 0.76rem;
+      line-height: 1.5;
+    }
+
+    /* Baseline, not stretch: the number is a numeral rather than a box, so it
+       sits on the h4's baseline and stays there if either size moves. */
+    .algo-step {
+      display: grid;
+      grid-template-columns: 1.2rem minmax(0, 1fr);
+      align-items: baseline;
+      gap: 1rem;
+      padding: 1.25rem 0;
+      color: var(--card-fg);
+      border-top: 1px solid var(--card-line);
+    }
+
+    /* The section headings' "1. Title", moved into the algorithm box: plain
+       decimal and a full stop, set at the step heading's own size so it labels
+       the step rather than outranking it. A filled accent disc here was the
+       one piece of heavy chrome on a page that otherwise spends colour on
+       small marks. Right-aligned against a column sized for one digit, so the
+       rail reads as one edge beside the text and a tenth step would still line
+       up. Not the mono face used elsewhere in this box: monospaced digits give
+       the full stop a whole character cell, which opens a gap between it and
+       the number it belongs to. */
+    .algo-number {
+      color: var(--card-fg);
+      font-size: 1.12rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      /* The number and its stop are one unit in a fixed-width column; without
+         this they can break onto two lines. */
+      white-space: nowrap;
+    }
+
+    /* Card ink, matching the section headings: the stop marks where the step
+       number ends, and the accent is reserved for the TL;DR list and the claim
+       tags rather than spent on punctuation. */
+    .algo-number::after {
+      content: ".";
+    }
+
+    .algo-step h4 {
+      margin: 0 0 0.35rem;
+      font-size: 1.12rem;
+    }
+
+    /* Full-strength ink at the heading's size: these lines explain the step
+       rather than caption it. --card-fg, not --panel-fg, or they disappear
+       against the light-mode card. */
+    .algo-step p {
+      margin: 0;
+      color: var(--card-fg);
+      font-size: 1.12rem;
+    }
+
+    .algorithm .math-scroll {
+      margin: 0.75rem 0 0;
+      padding: 0.8rem;
+      color: var(--card-fg);
+      background: var(--card-inset);
+      border-radius: 10px;
+      font-size: 1rem;
+    }
+
+
+    .claim {
+      margin: 4.5rem 0 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .claim:first-of-type { margin-top: 2rem; }
+
+    .claim-tag {
+      display: inline-block;
+      margin-bottom: 0.65rem;
+      padding: 0.2rem 0.55rem;
+      color: var(--panel-fg);
+      background: var(--coral);
+      border-radius: 999px;
+      font-family: "SFMono-Regular", Menlo, Consolas, Monaco, "Liberation Mono", "Lucida Console", monospace;
+      font-size: 0.68rem;
+      font-weight: 850;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .claim h3 {
+      margin: 0 0 0.8rem;
+      font-size: clamp(1.35rem, 3vw, 1.75rem);
+    }
+
+    .number-cell {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      font-weight: 760;
+    }
+
+    details {
+      margin: 1rem 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    summary {
+      padding: 1rem 1.1rem;
+      cursor: pointer;
+      font-weight: 780;
+    }
+
+    .details-body { padding: 0 1.1rem 1.1rem; }
+
+    /* An algebra step folded out of the main line of argument. Lighter than the
+       appendix cards: no fill, a rule on the left, so the derivation reads as an
+       aside to the surrounding prose rather than a section of its own. */
+    details.derivation {
+      margin: 1.25rem 0;
+      padding-left: 1rem;
+      background: none;
+      border: 0;
+      border-left: 2px solid var(--line);
+      border-radius: 0;
+    }
+
+    /* Accent-coloured, not muted grey: the fold sits inline in the prose with
+       no card around it, so colour is the only thing marking it clickable.
+       In muted grey it read as a caption and went unnoticed. */
+    details.derivation > summary {
+      padding: 0;
+      color: var(--blue);
+      font-size: 0.97rem;
+      font-weight: 700;
+    }
+
+    details.derivation > summary:hover { color: var(--blue); }
+    details.derivation[open] > summary { margin-bottom: 0.5rem; }
+    details.derivation .details-body { padding: 0; }
+
+    /* Wall-clock speedup sits next to the step speedup it is derived from,
+       set back so the step numbers still read as the table's main column. */
+    .wall { color: var(--muted); font-size: 0.92em; }
+
+    /* Only inside a real fold. .details-body is also used as a plain wrapper
+       inside non-collapsible equation cards, and shrinking there left two
+       cards on the same page at different text sizes. */
+    details .details-body p, details .details-body li {
+      font-size: 0.91rem;
+      line-height: 1.65;
+    }
+
+    /* Displays inside a fold read oversized against the already-shrunk prose
+       around them (.details-body p above) if left at the site-wide default.
+       The .algorithm variant is named explicitly: it and .details-body
+       .math-scroll are equal-specificity, so which wins would otherwise
+       depend on source order rather than intent. */
+    details .details-body .math-scroll {
+      font-size: clamp(0.85rem, 1.7vw, 0.95rem);
+    }
+
+    details .details-body .algorithm .math-scroll {
+      font-size: clamp(0.85rem, 1.7vw, 0.95rem);
+    }
+
+    /* The card tokens, not --blue-soft: this is the same kind of object as an
+       equation card or the algorithm box, and on the dark page --blue-soft
+       read as a navy panel among charcoal ones. In light mode --card-bg is
+       --blue-soft's value, so the box is unchanged there. */
+    .remember {
+      margin: 3rem 0;
+      padding: clamp(1.4rem, 4vw, 2.4rem);
+      color: var(--card-fg);
+      background: var(--card-bg);
+      border: 1px solid var(--card-line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .remember h3 {
+      margin: 0 0 1rem;
+      font-size: 2rem;
+    }
+
+    .remember ol { margin-bottom: 0; padding-left: 1.3rem; }
+    .remember li + li { margin-top: 0.65rem; }
+
+    footer {
+      margin-top: 6rem;
+      padding: 4rem 1rem 5rem;
+      color: rgba(255,255,255,0.72);
+      background: var(--panel);
+    }
+
+    .footer-inner {
+      width: min(var(--wide-width), 100%);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 3rem;
+      max-width: var(--body-width);
+    }
+
+    footer h2 {
+      color: var(--panel-fg);
+      font-size: 2rem;
+    }
+
+    footer a { color: #5ca5ff; }
+    footer a:hover { color: var(--panel-fg); }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.2rem;
+    }
+
+    .citation-block {
+      padding: 1rem;
+      overflow-x: auto;
+      color: #d5d7db;
+      background: rgba(255,255,255,0.07);
+      border-radius: 10px;
+      font-size: 0.78rem;
+      white-space: pre-wrap;
+    }
+
+    /* Same block on the light page rather than in the dark footer. */
+    .section .citation-block {
+      margin: 1.5rem 0;
+      color: var(--ink);
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+    }
+
+    /* Numbered citation markers in the prose, and the list they jump to.
+       The marker is a superscript link so it stays out of the reading line;
+       the list numbers itself with a counter so renumbering is a matter of
+       reordering the items. */
+    sup.cite {
+      font-size: 0.72em;
+      line-height: 0;
+      white-space: nowrap;
+    }
+
+    sup.cite a { text-decoration: none; }
+    sup.cite a + a { margin-left: 0.12em; }
+    sup.cite a:hover { text-decoration: underline; }
+
+    /* Footnotes: a marker anchored inline, and the note itself set smaller and
+       muted directly below the paragraph that raises it. */
+    sup.fn {
+      font-size: 0.72em;
+      line-height: 0;
+    }
+
+    sup.fn a { text-decoration: none; }
+    sup.fn a:hover { text-decoration: underline; }
+
+    ol.footnotes {
+      margin: 1.75rem 0 0;
+      padding-left: 1.2rem;
+      color: var(--muted);
+      font-size: 0.94rem;
+    }
+
+    ol.footnotes li + li { margin-top: 0.8rem; }
+    ol.footnotes li::marker { color: var(--muted); }
+    a.fn-back { margin-left: 0.35em; text-decoration: none; }
+
+    ol.references {
+      margin: 1.75rem 0 0;
+      padding-left: 0;
+      list-style: none;
+      counter-reset: ref;
+    }
+
+    ol.references li {
+      display: grid;
+      grid-template-columns: 2.5rem minmax(0, 1fr);
+      margin-bottom: 1.15rem;
+      line-height: 1.5;
+      scroll-margin-top: 5rem;
+    }
+
+    ol.references li::before {
+      content: counter(ref) ".";
+      counter-increment: ref;
+      grid-column: 1;
+      grid-row: 1;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Both lines share the wide second column. Without this the marker takes
+       the first cell and the title auto-flows back into the narrow number
+       column, wrapping to one word per line. */
+    ol.references li > * { grid-column: 2; }
+
+    /* Authors and year on the first line, title beneath it. */
+    .ref-meta {
+      display: block;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .ref-title {
+      display: block;
+      margin-top: 0.15rem;
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    a.ref-title { color: var(--blue); }
+
+    /* Landing on a reference from its marker should make clear which one. */
+    ol.references li:target { color: var(--ink); }
+
+    @media (max-width: 820px) {
+      body { font-size: 17px; }
+
+      .metric { padding: 1.1rem; }
+
+      /* .frontmatter is no longer a grid -- the TL;DR is a single column at
+         every width, and the outline is either in the margin or in the flow
+         beneath it. */
+      .footer-inner { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .toplinks a:not(:last-child) { display: none; }
+      .hero { padding-top: 3.5rem; }
+      h1 { font-size: clamp(1.85rem, 9vw, 2.5rem); }
+      .subtitle { font-size: 1.1rem; }
+      .result-strip { grid-auto-flow: row; grid-auto-columns: auto; }
+      .metric { min-height: 96px; border-right: 0; border-bottom: 1px solid var(--card-line); }
+      .metric:last-child { border-bottom: 0; }
+      .frontmatter { margin-bottom: 5rem; }
+      .section { padding: 4.5rem 0; }
+      .algo-step { grid-template-columns: 1.1rem minmax(0, 1fr); gap: 0.7rem; }
+      figure { padding: 0.45rem; }
+      figcaption { padding: 0 0.45rem 0.4rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { transition: none !important; }
+    }
+
+    @media print {
+      :root { --paper: #fff; --white: #fff; --ink: #111; }
+      body { background: #fff; color: #111; font-size: 11pt; }
+      .skip-link, .topbar, .hero-actions, .side-toc, .outline-fab { display: none !important; }
+      .hero, .section, .section.wide, .frontmatter, figure { width: 100%; }
+      .hero { padding: 2rem 0; }
+      .section { padding: 1.75rem 0; }
+      figure { margin: 1.25rem auto; }
+      .claim { margin: 1.75rem 0 1rem; }
+      .frontmatter { display: block; margin: 1rem 0 2rem; }
+      .tldr, .remember, .algorithm, .equation-card, .structure-map {
+        break-inside: avoid;
+        box-shadow: none;
+      }
+      .result-strip { color: #111; background: #fff; border: 1px solid #aaa; box-shadow: none; }
+      .metric { color: #111; border-color: #aaa; }
+      .metric-label { color: #444; }
+      .algorithm, .equation-card, .structure-map, .remember {
+        color: #111;
+        background: #f2f2f2;
+        border: 1px solid #aaa;
+      }
+      .algorithm .math-scroll, .equation-card .math-scroll {
+        color: #111;
+        background: #fafafa;
+      }
+      /* These components are white-on-dark on screen; force dark ink for paper. */
+      .structure-map, .algorithm, .equation-card, .remember { background: #fff; }
+      .algorithm-head, .algorithm-head h3, .algorithm-head span,
+      .algo-step, .algo-step h4, .algo-step p { color: #111; background: #ddd; }
+      /* No fill: on screen this is a bare numeral, not the old accent disc.
+         The stop is accent-coloured there; on paper it joins the ink. */
+      .algo-number, .algo-number::after { color: #111; background: none; }
+      .algo-step { border-top-color: #bbb; }
+      /* Product diagram: invert to dark-on-white, dashed strokes mark the updates. */
+      .pd-txt, .pd-lbl-b, .pd-lbl-a, .pd-lbl-upd,
+      .pd-note-em, .pd-eyebrow-1, .pd-eyebrow-2 { fill: #111; }
+      .pd-op, .pd-dim, .pd-note, .pd-note-sm { fill: #444; }
+      .pd-frozen { fill: #f0f0f0; stroke: #777; }
+      .pd-merged { fill: #e2e2e2; stroke: #555; }
+      .pd-b, .pd-a { fill: #fff; stroke: #333; }
+      .pd-da, .pd-db { fill: #fff; stroke: #333; stroke-dasharray: 4 3; }
+      .pd-chip { fill: #fff; opacity: 1; }
+      .pd-rule { stroke: #aaa; }
+      .diagram-scroll { overflow-x: visible; }
+      a { color: #111; }
+      a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.75em; }
+      figure { box-shadow: none; break-inside: avoid; }
+      footer { margin-top: 2rem; color: #111; background: #fff; border-top: 1px solid #aaa; }
+      footer h2, footer a { color: #111; }
+    }
+  </style>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['\\[', '\\]']],
+        processEscapes: true,
+        // 'ams' leaves plain \[ ... \] unnumbered while still resolving the
+        // manual \tag{...}\label{...} pairs that \eqref points at.
+        tags: 'ams'
+      },
+      chtml: { scale: 1 },
+      options: { enableMenu: false }
+    };
+    // If the CDN is unreachable, the TeX source stays visible and readable
+    // inside its scrollable box rather than collapsing the layout.
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#article-main">Skip to article</a>
+
+  <header>
+    <div class="topbar">
+      <a class="wordmark" href="#top" aria-label="PoLoRA article home">
+        <span class="wordmark-mark" aria-hidden="true">❄️</span>
+        <span>PoLoRA</span>
+      </a>
+      <nav class="toplinks" aria-label="Primary">
+        <a href="#evidence">Results</a>
+        <a href="https://arxiv.org/abs/2607.17620" target="_blank" rel="noopener noreferrer">Paper ↗</a>
+        <a href="https://github.com/nikhilgsh/polora" target="_blank" rel="noopener noreferrer">Code ↗</a>
+        <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Switch to dark mode" aria-pressed="false">
+          <span class="sun" aria-hidden="true">☀</span>
+          <span class="moon" aria-hidden="true">☾</span>
+        </button>
+      </nav>
+    </div>
+
+    <div class="hero" id="top">
+      <div class="eyebrow">Paper · July 2026</div>
+      <h1>PoLoRA: A Preconditioned Orthogonalized LoRA Optimizer</h1>
+      <p class="subtitle"><a href="https://nikhilgsh.github.io/" target="_blank" rel="noopener noreferrer">Nikhil Ghosh</a>&emsp;&emsp;<a href="https://parshakova.github.io/" target="_blank" rel="noopener noreferrer">Tetiana Parshakova</a>&emsp;&emsp;<a href="https://gowerrobert.github.io/" target="_blank" rel="noopener noreferrer">Robert M. Gower</a><br>Center for Computational Mathematics&emsp;&emsp;Flatiron Institute</p>
+      <div class="hero-actions">
+        <a class="button" href="https://arxiv.org/abs/2607.17620" target="_blank" rel="noopener noreferrer">Read the paper</a>
+        <a class="button secondary" href="https://github.com/nikhilgsh/polora" target="_blank" rel="noopener noreferrer">View the code</a>
+      </div>
+    </div>
+
+    <div class="result-strip" aria-label="Headline results">
+      <div class="metric">
+        <span class="metric-value">up to 1.74×</span>
+        <span class="metric-label">Fewer steps to Adam’s final loss</span>
+      </div>
+      <div class="metric">
+        <span class="metric-value">under 3%</span>
+        <span class="metric-label">Overhead over Adam</span>
+      </div>
+    </div>
+
+    <div class="frontmatter">
+      <section class="tldr" aria-labelledby="tldr-title">
+        <h2 id="tldr-title">TL;DR</h2>
+        <ul>
+          <li>Matrix-aware optimizers such as Muon<sup class="cite"><a href="#ref-2">[2]</a></sup> outperform Adam<sup class="cite"><a href="#ref-3">[3]</a></sup> in pretraining. Can those gains carry over to LoRA<sup class="cite"><a href="#ref-1">[1]</a></sup> finetuning?</li>
+          <li>Applying Muon naively ignores the product structure of the LoRA update and does not beat Adam. Just making Muon <em>product-aware</em> barely helps.</li>
+          <li>To address this, we derive PoLoRA, a product-aware method that both preconditions and orthogonalizes the gradient.</li>
+          <li>The update solves a steepest descent problem subject to a bound on each sample&rsquo;s loss change.</li>
+          <li>Across 1B–8B models on code and math, PoLoRA reaches Adam’s final loss in \(1.20\times\)–\(1.74\times\) fewer steps.</li>
+        </ul>
+      </section>
+
+    </div>
+
+    <!-- The one outline on the page. It used to be duplicated: a copy here in
+         the frontmatter and a mirror of it in the margin, swapped on scroll,
+         which is why the two could look different. This is now the only copy,
+         hand-maintained, present the whole way down. -->
+    <nav class="side-toc" id="side-outline" aria-labelledby="side-outline-title">
+      <h2 id="side-outline-title">Outline</h2>
+      <ol>
+        <li><a href="#product">LoRA trains a product</a></li>
+        <li><a href="#product-muon">Product Muon</a></li>
+        <li><a href="#loss-control">Preconditioned Muon</a></li>
+        <li><a href="#direction">The PoLoRA direction</a></li>
+        <li><a href="#magnitude">The magnitude rule</a></li>
+        <li><a href="#algorithm">The PoLoRA step</a></li>
+        <li><a href="#practical">Computational cost</a></li>
+        <li>
+          <a href="#evidence">Experiments</a>
+          <ol>
+            <li><a href="#evidence-results">PoLoRA speedups</a></li>
+            <li><a href="#evidence-ablation">Component ablation</a></li>
+            <li><a href="#evidence-lr-transfer">Learning-rate transfer across ranks</a></li>
+            <li><a href="#evidence-distribution-shift">Effect of the dataset</a></li>
+          </ol>
+        </li>
+        <li><a href="#discussion">Conclusion</a></li>
+      </ol>
+      <ul class="toc-back">
+        <li><a href="#footnotes">Footnotes</a></li>
+        <li><a href="#references">References</a></li>
+        <li><a href="#cite">Citing this work</a></li>
+      </ul>
+    </nav>
+    <button class="outline-fab" id="outline-fab" type="button" aria-expanded="false" aria-controls="side-outline">Outline</button>
+  </header>
+
+  <main id="article-main">
+    <article>
+      <figure>
+        <img src="assets/hero-results.svg" width="975" height="405" loading="lazy" alt="PoLoRA has the lowest evaluation-loss curve against Adam, iMuon, LoRA-RITE, and Muon, and the lowest final loss across a three-point learning-rate sweep.">
+        <figcaption><strong>PoLoRA outperforms baselines.</strong> Llama-3.2-1B on math, rank 256. Right panel: learning rate in multiples of each optimizer’s best&nbsp;learning&nbsp;rate.</figcaption>
+      </figure>
+
+      <section class="section numbered" id="product">
+        <div>
+          <h2>LoRA trains a product</h2>
+          <p>For a frozen pretrained weight <span class="nobr">\(W_0\),</span> LoRA represents the trainable update as a product of two factors:<sup class="fn" id="fnref-alpha"><a href="#fn-alpha">1</a></sup></p>
+          <div class="math-scroll" role="img" aria-label="LoRA parameterization">
+            \[
+            \begin{gathered}
+            W=W_0+BA,\\[4pt]
+            B\in\mathbb{R}^{d_{\mathrm{out}}\times r},\qquad
+            A\in\mathbb{R}^{r\times d_{\mathrm{in}}},\qquad
+            r\ll d_{\mathrm{in}},d_{\mathrm{out}}.
+            \end{gathered}
+            \]
+          </div>
+          <p>For LoRA, the first-order approximation of the update \(\Delta W\) is:</p>
+          <div class="math-scroll" role="img" aria-label="Exact and linearized LoRA product update">
+            \begin{align}
+            \Delta W
+            &amp;=(B+\Delta B)(A+\Delta A)-BA \nonumber\\
+            &amp;=B\Delta A+\Delta B A+\Delta B\Delta A \nonumber\\
+            &amp;\approx B\Delta A+\Delta B A. \label{eq:lin}
+            \end{align}
+          </div>
+          <p>An optimizer defined using \(\Delta W\) should account for the specific structure induced by LoRA.</p>
+        </div>
+
+        <div class="structure-map">
+          <div class="diagram-scroll">
+            <svg viewBox="0 0 860 372" role="img" aria-labelledby="pd-title pd-desc">
+              <title id="pd-title">The LoRA product and its first-order update</title>
+              <desc id="pd-desc">Top row: the merged weight W equals the frozen square matrix W-zero plus the
+              product of a tall thin matrix B, of shape d-out by r, and a wide short matrix A, of shape r by d-in.
+              The layer output depends on the factors only through their product. Bottom row: to first order, one optimizer step changes the merged
+              weight by B times Delta-A plus Delta-B times A, so each term multiplies a current factor by an update
+              to the other factor. Neither term is controlled by the size of Delta-A or Delta-B alone.</desc>
+              <defs>
+                <pattern id="pd-hatch-a" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <line x1="0" y1="0" x2="0" y2="8" stroke="#b27aeb" stroke-width="2" opacity="0.5"></line>
+                </pattern>
+                <pattern id="pd-hatch-b" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <line x1="0" y1="0" x2="0" y2="8" stroke="#5ca5ff" stroke-width="2" opacity="0.5"></line>
+                </pattern>
+              </defs>
+
+              <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" letter-spacing="1.4">
+                <text class="pd-eyebrow-1" x="44" y="30">THE MERGED WEIGHT</text>
+              </g>
+              <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19">
+                <!-- merged weight -->
+                <rect class="pd-merged" x="44" y="46" width="100" height="100" rx="4"></rect>
+                <text class="pd-txt" x="94" y="102" text-anchor="middle" font-style="italic">W</text>
+                <text class="pd-op" x="162" y="102" text-anchor="middle">=</text>
+                <!-- frozen base -->
+                <rect class="pd-frozen" x="182" y="46" width="100" height="100" rx="4"></rect>
+                <text class="pd-txt" x="232" y="102" text-anchor="middle" font-style="italic">W<tspan font-size="13" dy="5" font-style="normal">0</tspan></text>
+                <text class="pd-op" x="300" y="102" text-anchor="middle">+</text>
+                <!-- B: tall and thin, d_out by r -->
+                <rect class="pd-b" x="320" y="46" width="24" height="100" rx="3"></rect>
+                <text class="pd-lbl-b" x="332" y="102" text-anchor="middle" font-size="16" font-style="italic">B</text>
+                <!-- A: wide and short, r by d_in -->
+                <rect class="pd-a" x="348" y="46" width="100" height="24" rx="3"></rect>
+                <text class="pd-lbl-a" x="398" y="63" text-anchor="middle" font-size="16" font-style="italic">A</text>
+              </g>
+              <g class="pd-dim" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">
+                <text x="36" y="100" text-anchor="middle" transform="rotate(-90 36 100)">d_out</text>
+                <text x="94" y="164" text-anchor="middle">d_in</text>
+                <text x="332" y="164" text-anchor="middle">r</text>
+                <text x="460" y="62">r</text>
+              </g>
+              <g class="pd-note" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16">
+                <text x="492" y="88">The output of the layer depends</text>
+                <text x="492" y="114">on <tspan class="pd-note-em" font-style="italic">A</tspan> and <tspan class="pd-note-em" font-style="italic">B</tspan> through the product <tspan class="pd-note-em" font-style="italic">BA</tspan>.</text>
+              </g>
+
+              <line class="pd-rule" x1="44" y1="196" x2="816" y2="196"></line>
+
+              <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12.5" letter-spacing="1.4">
+                <text class="pd-eyebrow-2" x="44" y="232">THE FIRST-ORDER APPROXIMATION</text>
+              </g>
+              <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="19">
+                <text class="pd-txt" x="44" y="304" font-style="italic">ΔW</text>
+                <text class="pd-op" x="86" y="304">≈</text>
+                <!-- current B times the update to A -->
+                <rect class="pd-b" x="116" y="248" width="24" height="100" rx="3"></rect>
+                <text class="pd-lbl-b" x="128" y="304" text-anchor="middle" font-size="16" font-style="italic">B</text>
+                <rect class="pd-da" x="144" y="248" width="100" height="24" rx="3"></rect>
+                <rect class="pd-chip" x="177" y="251" width="34" height="18" rx="3"></rect>
+                <text class="pd-lbl-upd" x="194" y="265" text-anchor="middle" font-size="15" font-style="italic">ΔA</text>
+                <text class="pd-op" x="264" y="304" text-anchor="middle">+</text>
+                <!-- the update to B times current A -->
+                <rect class="pd-db" x="288" y="248" width="24" height="100" rx="3"></rect>
+                <rect class="pd-chip" x="289" y="289" width="22" height="18" rx="3"></rect>
+                <text class="pd-lbl-upd" x="300" y="303" text-anchor="middle" font-size="13.5" font-style="italic">ΔB</text>
+                <rect class="pd-a" x="316" y="248" width="100" height="24" rx="3"></rect>
+                <text class="pd-lbl-a" x="366" y="265" text-anchor="middle" font-size="16" font-style="italic">A</text>
+              </g>
+              <g class="pd-note" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="16">
+                <text x="492" y="277">In the linearized update to <tspan class="pd-note-em" font-style="italic">W</tspan>,</text>
+                <text x="492" y="303"><tspan class="pd-note-em">B</tspan> multiplies Δ<tspan class="pd-note-em">A</tspan>, and <tspan class="pd-note-em">A</tspan> multiplies Δ<tspan class="pd-note-em">B</tspan>.</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+      </section>
+
+      <section class="section numbered" id="product-muon">
+        <h2>Product Muon</h2>
+        <p>For a weight matrix with gradient <span class="nobr">\(G\),</span> Muon<sup class="cite"><a href="#ref-2">[2]</a></sup> is defined by a linear minimization oracle (LMO)<sup class="cite"><a href="#ref-4">[4]</a></sup></p>
+        <div class="math-scroll" role="img" aria-label="Muon spectral linear minimization oracle">
+          \begin{equation}\label{eq:lmo}
+          \underset{\Delta W}{\operatorname{minimize}}\quad
+          \langle G,\Delta W\rangle
+          \qquad\text{subject to}\qquad
+          \|\Delta W\|_2\leq\eta.
+          \end{equation}
+        </div>
+        <p>The solution is the matrix sign<sup class="fn" id="fnref-polar"><a href="#fn-polar">2</a></sup> of the gradient, scaled by <span class="nobr">\(-\eta\),</span></p>
+        <div class="math-scroll" role="img" aria-label="Muon matrix-sign solution">
+          \[
+          \Delta W=-\eta\,\operatorname{msign}(G),
+          \qquad
+          \operatorname{msign}(G):=UV^\top,
+          \]
+        </div>
+        <p>where \(G=U\Sigma V^\top\) is the reduced singular value decomposition.</p>
+        <p>Substituting \(\eqref{eq:lin}\) for \(\Delta W\) in \(\eqref{eq:lmo}\) gives the constraint
+        <span class="nobr">\(\|B\Delta A+\Delta B A\|_2\leq\eta\),</span> which couples \(\Delta A\) and <span class="nobr">\(\Delta B\),</span> making the LMO difficult to solve.
+        We can decouple the two unknowns by using the subadditivity of the spectral norm.
+        Subadditivity bounds the left-hand side by <span class="nobr">\(\|B\Delta A\|_2+\|\Delta B A\|_2\),</span>
+        so bounding each of those two terms by \(\eta/2\) implies
+        \(\|B\Delta A+\Delta B A\|_2\leq\eta\) and decouples the unknowns. The result is the <em>Product Muon</em> method:<sup class="fn" id="fnref-concurrent"><a href="#fn-concurrent">3</a></sup></p>
+        <div class="math-scroll" role="img" aria-label="The Product Muon problem">
+          \[
+          \begin{aligned}
+          \underset{\Delta A,\Delta B}{\operatorname{minimize}}\quad
+          &amp;\langle G,B\Delta A+\Delta B A\rangle\\[2pt]
+          \text{subject to}\quad
+          &amp;\|B\Delta A\|_2\leq\eta/2,
+          \qquad
+          \|\Delta B A\|_2\leq\eta/2.
+          \end{aligned}
+          \]
+        </div>
+
+        <div class="equation-card">
+          <span class="label">Product Muon</span>
+          <div class="details-body">
+            <p>The resulting factor updates of Product Muon are given by</p>
+            <div class="math-scroll" role="img" aria-label="Closed-form Product Muon factor updates">
+              \[
+              \begin{aligned}
+              \Delta A&amp;=-\tfrac{\eta}{2}\,S_B^{-1/2}
+              \operatorname{msign}\!\left(S_B^{-1/2}G_A\right),\\[4pt]
+              \Delta B&amp;=-\tfrac{\eta}{2}\,
+              \operatorname{msign}\!\left(G_BS_A^{-1/2}\right)S_A^{-1/2},
+              \end{aligned}
+              \]
+            </div>
+            <p>with <span class="nobr">\(S_B=B^\top B\),</span> <span class="nobr">\(S_A=AA^\top\),</span> and factor gradients <span class="nobr">\(G_A=B^\top G\),</span> <span class="nobr">\(G_B=GA^\top\).</span></p>
+          </div>
+        </div>
+
+        <p>This step is product-aware, but trains barely faster than Adam (<a href="#evidence">Experiments</a>).</p>
+      </section>
+
+      <section class="section numbered" id="loss-control">
+        <h2>Preconditioned Muon</h2>
+        <p>We first derive a preconditioned version of Muon for a full weight matrix <span class="nobr">\(W\),</span> before adapting it to the LoRA factors \(A\) and \(B\) in the next section. The spectral constraint<sup class="fn" id="fnref-specnorm"><a href="#fn-specnorm">4</a></sup> \(\|\Delta W\|_2\leq\eta\) in Muon is equivalent to</p>
+        <div class="math-scroll" role="img" aria-label="Muon output-change bound">
+          \[
+          \|\Delta W x\|_2\leq\eta
+          \qquad\text{for every }\|x\|_2\leq1.
+          \]
+        </div>
+        <p>This bounds the largest change in the layer’s output over all unit-norm inputs<sup class="cite"><a href="#ref-10">[10]</a></sup>. However, controlling the layer's output is at best a proxy for what we really care about, which is the loss of the network.</p>
+
+        <p>Let \(x_1,\ldots,x_n\) be the input activations to layer <span class="nobr">\(W\),</span> and let \(\ell_i\) be the loss on activation <span class="nobr">\(x_i\),</span> with gradient <span class="nobr">\(G_i\).</span> To first order around the current <span class="nobr">\(W\),</span> the change in \(\ell_i\) is</p>
+        <div class="math-scroll" role="img" aria-label="Linearized per-activation loss change">
+          \[
+          \Delta\ell_i:=\ell_i(W+\Delta W)-\ell_i(W)
+          \approx \langle G_i,\Delta W\rangle, \qquad i=1, \ldots, n.
+          \]
+        </div>
+        <p>To keep training stable, we would like to bound \(\Delta\ell_i\) across the batch, by taking a steepest descent step subject to a bound on each sample&rsquo;s loss change, solving</p>
+        <div class="math-scroll" role="img" aria-label="Loss-control linear minimization oracle">
+          \begin{equation}\label{eq:ls}
+          \underset{\Delta W}{\operatorname{minimize}}\quad
+          \langle G,\Delta W\rangle
+          \qquad\text{subject to}\qquad
+          \left|\langle G_i,\Delta W\rangle\right|\leq\tau,
+          \quad i=1,\ldots,n.
+          \end{equation}
+        </div>
+
+        <p>The per-sample constraints in problem \(\eqref{eq:ls}\) are difficult to enforce, since we lack efficient access to the individual sample gradients <span class="nobr">\(G_i\).</span> To get around this issue, we define a more tractable <em>outergradient</em> set \(\mathcal{G}\) that contains every per-sample gradient <span class="nobr">\(G_i\).</span> Thus, for any update <span class="nobr">\(\Delta W\),</span></p>
+        <div class="math-scroll" role="img" aria-label="Worst case over the per-sample gradients is bounded by the worst case over the outer set">
+          \[
+          \max_{i=1,\ldots,n}\left|\langle G_i,\Delta W\rangle\right|
+          \le
+          \max_{\widetilde G\in\mathcal{G}}
+          \langle\widetilde G,\Delta W\rangle.
+          \]
+        </div>
+        <p>We construct \(\mathcal{G}\) using two properties shared by every <span class="nobr">\(G_i\).</span> Let \(\Sigma:=\frac{1}{n}\sum_{i=1}^{n}\operatorname{vec}(G_i)\operatorname{vec}(G_i)^\top\) be the second moment of the vectorized gradients.</p>
+        <div class="equation-card">
+          <span class="label">Properties of per-sample gradients</span>
+          <ul>
+            <li>
+              <strong>Rank one.</strong> Each per-sample gradient is an outer product,
+              \[
+              G_i=b_ix_i^\top, \qquad b_i\in\mathbb{R}^{d_{\mathrm{out}}},\;\; x_i\in\mathbb{R}^{d_{\mathrm{in}}}.
+              \]
+            </li>
+            <li>
+              <strong>Leverage bound.</strong> Every gradient is bounded in the metric induced by <span class="nobr">\(\Sigma\),</span>
+              \[
+              \left\langle\Sigma^{\dagger}\operatorname{vec}(G_i),\operatorname{vec}(G_i)\right\rangle\leq n.
+              \]
+            </li>
+          </ul>
+        </div>
+        <p>These two properties motivate the following definition of the outergradient set,</p>
+        <div class="math-scroll" role="img" aria-label="Definition of the outergradient set">
+          \begin{equation}\label{eq:outergrad-set}
+          \mathcal{G}(\Sigma):=\left\{
+          \widetilde G=bx^\top
+          \; \bigg | \;
+          b\in\mathbb{R}^{d_{\mathrm{out}}},\;
+          x\in\mathbb{R}^{d_{\mathrm{in}}},\;
+          \left\langle\Sigma^{\dagger}\operatorname{vec}(\widetilde G),\operatorname{vec}(\widetilde G)\right\rangle\leq n
+          \right\}.
+          \end{equation}
+        </div>
+
+
+        <figure>
+          <img src="assets/outer-gradient-set.svg" width="720" height="380" loading="lazy" alt="The set G of Sigma is drawn as an ellipsoid, the leverage bound, intersected with the curved band of rank-one matrices b x transpose. The four observed per-sample gradients G1 through G4 lie inside the intersection, so the set covers every gradient the batch actually produces.">
+          <figcaption><strong>The outergradient set.</strong> \(\mathcal{G}(\Sigma)\) contains every observed <span class="nobr">\(G_i\).</span></figcaption>
+        </figure>
+
+        <p>A dense estimate of \(\Sigma\) would be too large to store or invert. For tractability, we approximate it by a Kronecker product of positive definite <em>preconditioners</em><sup class="cite"><a href="#ref-11">[11]</a><a href="#ref-12">[12]</a><a href="#ref-13">[13]</a></sup></p>
+        <div class="math-scroll" role="img" aria-label="Kronecker approximation to the gradient second moment">
+          \begin{equation}\label{eq:kron-approx}
+          \Sigma\approx Q\otimes P,
+          \qquad
+          P\in\mathbb{R}^{d_{\mathrm{out}}\times d_{\mathrm{out}}},
+          \quad
+          Q\in\mathbb{R}^{d_{\mathrm{in}}\times d_{\mathrm{in}}}.
+          \end{equation}
+        </div>
+        <p>With this Kronecker approximation, the maximum of \(\langle\widetilde G,\Delta W\rangle\) over \(\widetilde G\in\mathcal{G}(Q\otimes P)\) is exactly a preconditioned spectral norm<sup class="cite"><a href="#ref-14">[14]</a></sup>,</p>
+        <div class="math-scroll" role="img" aria-label="Worst case over the outergradient set equals a preconditioned spectral norm">
+          \[
+          \max_{\widetilde G\in\mathcal{G}(Q\otimes P)}
+          \left\langle\widetilde G,\Delta W\right\rangle
+          =
+          \sqrt{n}\left\|P^{1/2}\Delta WQ^{1/2}\right\|_2.
+          \]
+        </div>
+        <p>Absorbing<sup class="fn" id="fnref-scaleinvariant"><a href="#fn-scaleinvariant">5</a></sup> \(\sqrt{n}\) into \(\tau\) gives a constraint on \(\Delta W\) sufficient to guarantee the per-sample bounds in problem <span class="nobr">\(\eqref{eq:ls}\).</span> Replacing those \(n\) per-sample constraints with this single constraint gives the following problem in place of <span class="nobr">\(\eqref{eq:ls}\):</span></p>
+        <div class="math-scroll" role="img" aria-label="Loss-control problem with per-sample constraints replaced by the preconditioned spectral constraint">
+          \begin{equation}\label{eq:pls}
+          \begin{aligned}
+          \underset{\Delta W}{\operatorname{minimize}}\quad
+          &amp;\langle G,\Delta W\rangle\\[2pt]
+          \text{subject to}\quad
+          &amp;\left\|P^{1/2}\Delta WQ^{1/2}\right\|_2\leq\tau.
+          \end{aligned}
+          \end{equation}
+        </div>
+
+        
+
+<div class="equation-card">
+          <span class="label">Full-weight direction</span>
+          <p>The solution of problem \(\eqref{eq:pls}\) yields the preconditioned Muon update<sup class="fn" id="fnref-muonspecial"><a href="#fn-muonspecial">6</a></sup></p>
+          <div class="math-scroll" role="img" aria-label="Full-weight preconditioned orthogonalized direction">
+            \[
+            \Delta W=
+            -\tau P^{-1/2}
+            \operatorname{msign}\!\left(P^{-1/2}GQ^{-1/2}\right)
+            Q^{-1/2}.
+            \]
+          </div>
+        </div>
+
+        <p id="diagonal-preconditioners">The preconditioners \(P\) and \(Q\) are fit online<sup class="fn" id="fnref-precond"><a href="#fn-precond">7</a></sup>, and for efficiency are diagonal.</p>
+
+      </section>
+      <section class="section numbered" id="direction">
+        <h2>The PoLoRA direction</h2>
+        <p>The previous section derived an update for a full weight matrix <span class="nobr">\(W\).</span> We now adapt it to the LoRA factors \(A\) and <span class="nobr">\(B\),</span> deriving their update direction here; the next section sets its magnitude. Replacing \(\Delta W\) with the linearized product update \(\eqref{eq:lin}\) in \(\eqref{eq:pls}\) gives</p>
+        <div class="math-scroll" role="img" aria-label="Preconditioned product linear minimization oracle for the LoRA factors">
+          \[
+          \underset{\Delta A,\Delta B}{\operatorname{minimize}}\quad
+          \left\langle G,B\Delta A+\Delta B A\right\rangle
+          \qquad\text{subject to}\qquad
+          \left\|P^{1/2}\left(B\Delta A+\Delta B A\right)Q^{1/2}\right\|_2\leq\tau.
+          \]
+        </div>
+        <p>Norm subadditivity again bounds the left-hand side by the sum of the two factor terms, so bounding each by \(\tau\) decouples the problem into one minimization problem per factor<sup class="fn" id="fnref-scaleinvariant2"><a href="#fn-scaleinvariant">5</a></sup>:</p>
+        <div class="math-scroll" role="img" aria-label="The two decoupled factorwise linear minimization oracles">
+          \begin{equation}\label{eq:fls}
+          \begin{aligned}
+          \underset{\Delta A}{\operatorname{minimize}}\quad
+          \left\langle G_A,\Delta A\right\rangle
+          &amp;\quad\text{subject to}\quad
+          \left\|P^{1/2}B\Delta AQ^{1/2}\right\|_2\leq\tau,\\[4pt]
+          \underset{\Delta B}{\operatorname{minimize}}\quad
+          \left\langle G_B,\Delta B\right\rangle
+          &amp;\quad\text{subject to}\quad
+          \left\|P^{1/2}\Delta B AQ^{1/2}\right\|_2\leq\tau,
+          \end{aligned}
+          \end{equation}
+        </div>
+        <div class="equation-card">
+          <span class="label">PoLoRA factor directions</span>
+          <p>The solution of problems \(\eqref{eq:fls}\) gives factor update directions</p>
+          <div class="math-scroll" role="img" aria-label="PoLoRA directions for A and B">
+            \begin{equation}\label{eq:factor-directions}
+            \begin{aligned}
+            D_A &amp;=
+            C_B^{-1/2}
+            \operatorname{msign}\!\left(
+              C_B^{-1/2}G_AQ^{-1/2}
+            \right)
+            Q^{-1/2},\\[4pt]
+            D_B &amp;=
+            P^{-1/2}
+            \operatorname{msign}\!\left(
+              P^{-1/2}G_BC_A^{-1/2}
+            \right)
+            C_A^{-1/2}.
+            \end{aligned}
+            \end{equation}
+          </div>
+          <p>where \(C_B:=B^\top PB\) and \(C_A:=AQA^\top\) are both \(r\times r\) matrices.</p>
+        </div>
+
+      </section>
+
+      <section class="section numbered" id="magnitude">
+        <h2>The magnitude rule</h2>
+        <p>The constraints in the <a href="#product-muon">Product Muon LMO</a> bound <span class="nobr">\(\Delta W\approx B\Delta A+\Delta B A\),</span> but not the factor updates \(\Delta A\) and \(\Delta B\) themselves. In fact, the updates satisfy</p>
+        <div class="math-scroll" role="img" aria-label="Factor update norms scale with the inverse smallest singular value of the other factor">
+          \[
+          \|\Delta A\|_2 \propto \sigma_{\min}(B)^{-1}
+          \qquad\text{and}\qquad
+          \|\Delta B\|_2 \propto \sigma_{\min}(A)^{-1},
+          \]
+        </div>
+        <p>which diverge as the smallest singular values of \(B\) and \(A\) shrink<sup class="fn" id="fnref-binit"><a href="#fn-binit">9</a></sup>.</p>
+
+        <p>To ensure that \(\|\Delta A\|_2\) and \(\|\Delta B\|_2\) stay balanced independent of the conditioning of \(A\) and <span class="nobr">\(B\),</span> we rescale the updates so that <span class="nobr">\(\|\Delta A\|_2=\|\Delta B\|_2=\rho\),</span> where</p>
+        <div class="math-scroll" role="img" aria-label="Definition of the common factor step size rho">
+          \[
+          \rho=\frac{\eta}{\|A\|_2+\|B\|_2},
+          \]
+        </div>
+        <p>so that by the triangle inequality and norm submultiplicativity,</p>
+        <div class="math-scroll" role="img" aria-label="Linearized merged-update magnitude bound">
+          \[
+          \begin{aligned}
+          \|\Delta W\|_2
+          &amp;\approx
+          \|B\Delta A+\Delta B A\|_2\\[4pt]
+          &amp;\le
+          \|B\|_2\|\Delta A\|_2
+          +
+          \|A\|_2\|\Delta B\|_2\\[4pt]
+          &amp;=
+          \rho\left(\|A\|_2+\|B\|_2\right)
+          =
+          \eta.
+          \end{aligned}
+          \]
+        </div>
+
+        <p>The resulting updates are</p>
+        <div class="math-scroll" role="img" aria-label="PoLoRA normalized factor updates">
+          \[
+          \Delta A=-\rho\,\frac{D_A}{\|D_A\|_2},
+          \qquad
+          \Delta B=-\rho\,\frac{D_B}{\|D_B\|_2},
+          \]
+        </div>
+        <p>where \(D_A\) and \(D_B\) are given by \eqref{eq:factor-directions}.</p>
+      </section>
+
+      <section class="section numbered" id="algorithm">
+        <div style="max-width: var(--body-width); margin-inline: auto;">
+          <h2>The PoLoRA step</h2>
+          <p>The <a href="#direction">PoLoRA direction</a> and <a href="#magnitude">magnitude rule</a> combine into the update below, applied once per adapted \((A,B)\) pair each optimizer step. For the full implementation, we also add momentum for the factor gradients and an online refit of the preconditioners <span class="nobr">\(P,Q\).</span></p>
+        </div>
+
+        <div class="algorithm" aria-label="Annotated PoLoRA algorithm">
+          <div class="algorithm-head">
+            <h3>PoLoRA step for an \((A,B)\) pair</h3>
+            <span>\(\eta\) learning rate, \(\beta_1\) momentum decay, \(\beta_2\) curvature decay, \(\varepsilon\) stability constant</span>
+          </div>
+
+          <div class="algo-step">
+            <div class="algo-number">1</div>
+            <div>
+              <h4>Momentum</h4>
+              <p>Update factor-gradient EMAs, then form look-ahead momentum for the direction.</p>
+              <div class="math-scroll">
+                \[
+                \begin{aligned}
+                M_A&amp;\leftarrow\beta_1\,M_A+(1-\beta_1)\,G_A,
+                &amp;\widehat M_A&amp;\leftarrow\beta_1\,M_A+(1-\beta_1)\,G_A,\\
+                M_B&amp;\leftarrow\beta_1\,M_B+(1-\beta_1)\,G_B,
+                &amp;\widehat M_B&amp;\leftarrow\beta_1\,M_B+(1-\beta_1)\,G_B.
+                \end{aligned}
+                \]
+              </div>
+            </div>
+          </div>
+
+          <div class="algo-step" id="algo-direction">
+            <div class="algo-number">2</div>
+            <div>
+              <h4>Direction</h4>
+              <p>Compute the directions \(\eqref{eq:factor-directions}\) with \(\widehat M_A\) and \(\widehat M_B\) in place of the factor gradients.</p>
+              <div class="math-scroll">
+                \[
+                \begin{aligned}
+                P&amp;=\operatorname{diag}(p/\|p\|_\infty),&amp;&amp;\quad Q=\operatorname{diag}(q/\|q\|_\infty),\\[4pt]
+                C_A&amp;=AQA^\top,&amp;&amp;\quad C_B=B^\top PB.
+                \end{aligned}
+                \]
+              </div>
+              <div class="math-scroll">
+                \[
+                \begin{aligned}
+                D_A&amp;=C_B^{-1/2}\,
+                \operatorname{msign}\!\left(
+                  C_B^{-1/2}\,\widehat M_A\,Q^{-1/2}
+                \right)
+                \,Q^{-1/2},\\[4pt]
+                D_B&amp;=P^{-1/2}\,
+                \operatorname{msign}\!\left(
+                  P^{-1/2}\,\widehat M_B\,C_A^{-1/2}
+                \right)
+                \,C_A^{-1/2}.
+                \end{aligned}
+                \]
+              </div>
+            </div>
+          </div>
+
+          <div class="algo-step">
+            <div class="algo-number">3</div>
+            <div>
+              <h4>Magnitude</h4>
+              <p>Rescale both factor updates to have the same spectral norm.<sup class="fn" id="fnref-cost"><a href="#fn-cost">8</a></sup></p>
+              <div class="math-scroll">
+                \[
+                \begin{gathered}
+                \rho=\frac{\eta}{\|A\|_2+\|B\|_2},\\[6pt]
+                A\leftarrow A-\rho\,\frac{D_A}{\max(\|D_A\|_2,\varepsilon)},\quad
+                B\leftarrow B-\rho\,\frac{D_B}{\max(\|D_B\|_2,\varepsilon)}.
+                \end{gathered}
+                \]
+              </div>
+            </div>
+          </div>
+
+          <div class="algo-step" id="algo-preconditioner">
+            <div class="algo-number">4</div>
+            <div>
+              <h4>Preconditioner update</h4>
+              <p>Update the preconditioner vectors \(p\) and \(q\) from the current factor gradients.<sup class="fn" id="fnref-precond2"><a href="#fn-precond">7</a></sup></p>
+              <div class="math-scroll">
+                \[
+                \begin{aligned}
+                q&amp;\leftarrow\beta_2\,q+(1-\beta_2)
+                \operatorname{diag}(G_A^\top\,C_B^{-1}\,G_A)\,/\,r,\\
+                p&amp;\leftarrow\beta_2\,p+(1-\beta_2)
+                \operatorname{diag}(G_B\,C_A^{-1}\,G_B^\top)\,/\,r.
+                \end{aligned}
+                \]
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <section class="section numbered" id="practical">
+        <h2>Computational cost</h2>
+        <p>The two non-trivial numerical subroutines in the optimizer step are the matrix sign of a \(d\times r\) matrix, in the <a href="#algo-direction">direction</a> step, and the inverse square root of an \(r\times r\) matrix, in the <a href="#algo-preconditioner">preconditioner-update</a> step. Since the matrix sign can be written as</p>
+        <div class="math-scroll" role="img" aria-label="The matrix sign as an inverse square root of a Gram matrix">
+          \[
+          \operatorname{msign}(X)=X(X^\top X)^{-1/2},
+          \qquad
+          X\in\mathbb{R}^{d\times r}.
+          \]
+        </div>
+        <p>the core operation for both is an \(r\times r\) inverse square root, computed with Gram Newton&ndash;Schulz<sup class="cite"><a href="#ref-16">[16]</a></sup>. Compared to using standard Newton-Schulz iterations on \(X\) directly to compute the matrix sign, this approach saves a factor of order \(d/r\) computation per iteration.</p>
+        <details class="derivation">
+          <summary>Gram Newton&ndash;Schulz</summary>
+          <div class="details-body">
+            <p>Each iteration applies a degree-five polynomial \(p_t(s)=a_ts+b_ts^3+c_ts^5\) to the singular values of <span class="nobr">\(X\).</span> The polynomials are chosen so that \((p_K\circ\cdots\circ p_1)(s)\approx1\) for every singular value <span class="nobr">\(s\).</span> Writing \(X=US V^\top\) for the reduced SVD,</p>
+            <div class="math-scroll" role="img" aria-label="Applying the polynomial to the singular values, fixing the singular vectors">
+              \[
+              p_t(X):=Up_t(S)V^\top.
+              \]
+            </div>
+            <p>Because \(p_t\) is odd, this reduces to right-multiplying \(X\) by a matrix polynomial in the \(r\times r\) Gram matrix \(R:=X^\top X\)<sup class="cite"><a href="#ref-16">[16]</a></sup>,</p>
+            <div class="math-scroll" role="img" aria-label="Applying the polynomial reduces to right-multiplication by a matrix polynomial in the Gram matrix">
+              \[
+              p_t(X)=X\left(a_tI+b_tR+c_tR^2\right),
+              \]
+            </div>
+            <p>For our implementation, the coefficients \(a_t,b_t,c_t\) are set using PolarExpress<sup class="cite"><a href="#ref-17">[17]</a></sup>.</p>
+            <div class="algorithm" aria-label="Gram Newton-Schulz pseudocode">
+              <div class="algorithm-head">
+                <h3>Gram Newton&ndash;Schulz</h3>
+                <span>input: \(R_0\in\mathbb{R}^{r\times r}\)</span>
+              </div>
+              <div class="math-scroll" role="img" aria-label="Gram Newton-Schulz iteration, computing the inverse square root of the input">
+                \[
+                \begin{aligned}
+                &amp;R\leftarrow R_0,\quad Z\leftarrow I_r\\[4pt]
+                &amp;\textbf{for } t=1,\ldots,K:\\[2pt]
+                &amp;\qquad M\leftarrow a_tI+b_tR+c_tR^2\\[2pt]
+                &amp;\qquad R\leftarrow MRM,\quad Z\leftarrow ZM\\[4pt]
+                &amp;\textbf{return } Z
+                \end{aligned}
+                \]
+              </div>
+            </div>
+            <p>The returned \(Z\) approximates <span class="nobr">\(R_0^{-1/2}\).</span> Calling the subroutine with \(R_0=X^\top X\) and returning \(XZ\) gives <span class="nobr">\(\operatorname{msign}(X)\).</span></p>
+          </div>
+        </details>
+        <p>Every Gram Newton&ndash;Schulz call runs for \(K\) iterations which contributes \(\Theta(Kr^3)\) FLOPs to the optimizer step cost. Over a batch of \(n_{\mathrm{tok}}\) tokens, the leading-order FLOPs for the optimizer step and the forward and backward passes are</p>
+        <div class="equation-card">
+          <span class="label">PoLoRA optimizer FLOPs</span>
+          <div class="math-scroll" role="img" aria-label="Leading-order optimizer FLOPs per layer, against the frozen forward and backward passes">
+            \[
+            C_{\mathrm{opt}}=\Theta\!\left(r^2(d_{\mathrm{in}}+d_{\mathrm{out}})+Kr^3\right),
+            \qquad
+            C_{\mathrm{fwd}+\mathrm{bwd}}=\Theta(d_{\mathrm{in}}d_{\mathrm{out}}n_{\mathrm{tok}}).
+            \]
+          </div>
+        </div>
+        <p>The per-layer overhead ratio is</p>
+        <div class="math-scroll" role="img" aria-label="Optimizer FLOP overhead as a fraction of the frozen forward and backward cost">
+          \[
+          \frac{C_{\mathrm{opt}}}{C_{\mathrm{fwd}+\mathrm{bwd}}}
+          =
+          \Theta\!\left(
+          \frac{r^2}{n_{\mathrm{tok}}}\left(\frac1{d_{\mathrm{in}}}+\frac1{d_{\mathrm{out}}}\right)
+          +
+          \frac{Kr^3}{d_{\mathrm{in}}d_{\mathrm{out}}n_{\mathrm{tok}}}
+          \right).
+          \]
+        </div>
+        <p>The relative overhead shrinks as \(n_{\mathrm{tok}}\) grows and as \(d_{\mathrm{in}}, d_{\mathrm{out}}\) grow relative to <span class="nobr">\(r\).</span></p>
+      </section>
+
+      <section class="section numbered" id="evidence">
+        <div style="max-width: var(--body-width); margin-inline: auto;">
+          <h2>Experiments</h2>
+          <p>For a given model and dataset, every optimizer trains with the same fixed hyperparameters except learning rate. We sweep each optimizer and select its best learning rate.</p>
+          <details>
+            <summary>Experimental configuration</summary>
+            <div class="details-body">
+              <div class="table-wrap">
+                <table>
+                  <caption style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">Fixed experimental configuration</caption>
+                  <tbody>
+                    <tr><th scope="row">Base models</th><td>OLMo-2-1B<sup class="cite"><a href="#ref-18">[18]</a></sup>, Llama-3.2-1B<sup class="cite"><a href="#ref-19">[19]</a></sup>, Qwen2.5-1.5B<sup class="cite"><a href="#ref-20">[20]</a></sup>, Llama-3-8B</td></tr>
+                    <tr><th scope="row">Datasets</th><td>OpenCoder<sup class="cite"><a href="#ref-22">[22]</a></sup>, OpenMathInstruct-2<sup class="cite"><a href="#ref-23">[23]</a></sup>, Bengali Aya<sup class="cite"><a href="#ref-24">[24]</a></sup></td></tr>
+                    <tr><th scope="row">Batch size</th><td>16</td></tr>
+                    <tr><th scope="row">Sequence length</th><td>2,048</td></tr>
+                    <tr><th scope="row">Schedule</th><td>constant learning rate, no weight decay</td></tr>
+                    <tr><th scope="row">Gradient clip</th><td>max global norm \(1.0\) (disabled for LoRA-RITE<sup class="cite"><a href="#ref-21">[21]</a></sup>)</td></tr>
+                    <tr><th scope="row">LoRA init</th><td>\(A\) initialized randomly, \(B\) initialized to zero, \(\alpha=r\)<sup class="cite"><a href="#ref-26">[26]</a><a href="#ref-27">[27]</a></sup></td></tr>
+                    <tr><th scope="row">LoRA layers</th><td>every linear layer except <code>lm_head</code></td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <div class="claim" id="evidence-results">
+          <h3>PoLoRA speedups</h3>
+          <div class="equation-card">
+            <span class="label">Steps-to-Adam</span>
+            <p>The number of steps a tuned optimizer needs to reach the final loss achieved by tuned&nbsp;Adam.</p>
+          </div>
+          <p>The step speedup of an optimizer is Adam’s training horizon divided by its steps-to-Adam. Its wall-clock speedup, shown in parentheses, further accounts for the measured per-step overhead.</p>
+          <div class="table-wrap">
+            <table>
+              <caption style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">PoLoRA step speedups over Adam across base models and datasets, with wall-clock speedup in parentheses</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Base model</th>
+                  <th scope="col">Code<br><span class="wall">step (wall-clock)</span></th>
+                  <th scope="col">Math<br><span class="wall">step (wall-clock)</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">OLMo-2-1B</th>
+                  <td class="number-cell">1.61× <span class="wall">(1.57×)</span></td>
+                  <td class="number-cell">1.74× <span class="wall">(1.70×)</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Llama-3.2-1B</th>
+                  <td class="number-cell">1.55× <span class="wall">(1.51×)</span></td>
+                  <td class="number-cell">1.63× <span class="wall">(1.58×)</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Qwen2.5-1.5B</th>
+                  <td class="number-cell">1.30× <span class="wall">(1.27×)</span></td>
+                  <td class="number-cell">1.64× <span class="wall">(1.60×)</span></td>
+                </tr>
+                <tr>
+                  <th scope="row">Llama-3-8B</th>
+                  <td class="number-cell">1.20× <span class="wall">(1.18×)</span></td>
+                  <td class="number-cell">1.59× <span class="wall">(1.56×)</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="claim" id="evidence-ablation">
+          <h3>Component ablation</h3>
+          <p>Starting from PoLoRA, we ablate <a href="#loss-control">curvature preconditioning</a> and then the <a href="#magnitude">magnitude rule</a>. Ablating both components results in <a href="#product-muon">Product Muon</a>, which yields no speedup over Adam. Curvature preconditioning and magnitude control each account for about half of PoLoRA’s gain over Adam.</p>
+          <figure>
+            <img src="assets/component-ablation.svg" width="975" height="375" loading="lazy" alt="Component ablation: Product Muon gives 1.01 times speedup, adding magnitude gives 1.29 times, and full PoLoRA gives 1.63 times.">
+            <figcaption><strong>Curvature preconditioning and magnitude control each account for about half of PoLoRA’s gain over Adam.</strong></figcaption>
+          </figure>
+        </div>
+
+        <div class="claim" id="evidence-lr-transfer">
+          <h3>Learning-rate transfer across ranks</h3>
+          <p>For Llama-3.2-1B finetuned on math, PoLoRA’s optimal learning rate is stable across rank, while Adam’s shifts. PoLoRA also shows less loss sensitivity to the learning rate. Its relative speedup over Adam roughly grows with the rank.</p>
+          <div class="table-wrap">
+            <table>
+              <caption style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);">PoLoRA speedup over Adam across LoRA ranks</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Rank</th>
+                  <th scope="col">32</th>
+                  <th scope="col">64</th>
+                  <th scope="col">128</th>
+                  <th scope="col">256</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">Step (wall-clock)</th>
+                  <td class="number-cell">1.48× <span class="wall">(1.44×)</span></td>
+                  <td class="number-cell">1.54× <span class="wall">(1.50×)</span></td>
+                  <td class="number-cell">1.52× <span class="wall">(1.49×)</span></td>
+                  <td class="number-cell">1.63× <span class="wall">(1.58×)</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <figure>
+            <img src="assets/lr-transfer.svg" width="975" height="390" loading="lazy" alt="PoLoRA's optimal learning rate stays at 0.01 across ranks 32 through 256, while Adam's optimal learning rate shifts.">
+            <figcaption><strong>PoLoRA’s optimal learning rate is stable across the swept ranks, while Adam’s drifts.</strong></figcaption>
+          </figure>
+        </div>
+
+        <div class="claim" id="evidence-distribution-shift">
+          <h3>Effect of the dataset</h3>
+          <p>PoLoRA’s speedup over Adam is larger on Bengali, a low-resource language underrepresented in the model’s pretraining data, compared to code which is better represented.</p>
+          <figure>
+            <img src="assets/distribution-shift.svg" width="975" height="435" loading="lazy" alt="PoLoRA reaches Adam's final loss 1.30 times faster on code and 1.73 times faster on Bengali for Qwen2.5-1.5B.">
+            <figcaption><strong>The speedup over Adam is larger on the low-resource language than on code.</strong> Qwen2.5-1.5B at rank 256.</figcaption>
+          </figure>
+          <p>We conjecture that PoLoRA’s advantage grows in settings where the update has more ability and incentive to adapt, whether from a higher rank or from further out of distribution finetuning data.</p>
+        </div>
+      </section>
+
+      <section class="section numbered" id="discussion">
+        <h2>Conclusion</h2>
+        <p>PoLoRA brings the performance gains of matrix-aware optimizers from pretraining into the LoRA finetuning setting, establishing the importance of the following principles.</p>
+        <div class="remember">
+          <h3>Principles of PoLoRA</h3>
+          <ol>
+            <li><strong>Product awareness:</strong> Account for the merged update \(\Delta W \approx B\Delta A+\Delta B A\) and not just each factor update on its own.</li>
+            <li><strong>Loss-sensitive direction:</strong> Update in directions that are sensitive to changes in the loss.</li>
+            <li><strong>Magnitude control:</strong> Ensure the magnitude of the updates is controlled in order to be insensitive to arbitrary conditioning.</li>
+          </ol>
+        </div>
+
+        <p>It is possible that there is more to be gained in the LoRA setting than in pretraining, since the LoRA factorization itself can produce an ill-conditioned optimization landscape. We see several directions for extending our work.</p>
+        <ol>
+          <li><strong>Better approximations.</strong> PoLoRA relies on several simplifications:
+            <ul>
+              <li><a href="#diagonal-preconditioners">diagonal preconditioners</a> \(P\) and <span class="nobr">\(Q\),</span></li>
+              <li>a Kronecker-factored approximation \(\eqref{eq:kron-approx}\) of the per-sample second moment <span class="nobr">\(\Sigma\),</span></li>
+              <li>linearization of the update \(\Delta W\) <span class="nobr">\(\eqref{eq:lin}\),</span></li>
+              <li>an outergradient set \(\eqref{eq:outergrad-set}\) that is a conservative superset of the sample gradients.</li>
+            </ul>
+          </li>
+          <li><strong>Beyond LoRA.</strong> The principles behind PoLoRA are not specific to LoRA &mdash; they may extend to pretraining or to other structured parameterizations.</li>
+          <li><strong>Scaling up.</strong> Do the gains continue to hold at larger model or data scale, or in other settings like continued pretraining?</li>
+        </ol>
+
+      </section>
+      <section class="section" id="footnotes">
+        <h2>Footnotes</h2>
+
+        <ol class="footnotes">
+          <li id="fn-alpha">LoRA is usually written \(W=W_0+(\alpha/r)BA\) with a scaling parameter <span class="nobr">\(\alpha\).</span> We set \(\alpha=r\) throughout<sup class="cite"><a href="#ref-26">[26]</a><a href="#ref-27">[27]</a></sup>, so the factor \(\alpha/r\) equals \(1\) and drops out. <a class="fn-back" href="#fnref-alpha" aria-label="Back to the text">↩</a></li>
+          <li id="fn-polar">The matrix sign is also called the orthogonal polar factor<sup class="cite"><a href="#ref-5">[5]</a></sup>. When \(G\) is rank-deficient the minimizer is not unique, and \(\operatorname{msign}(G)=UV^\top\) is one choice. <a class="fn-back" href="#fnref-polar" aria-label="Back to the text">↩</a></li>
+          <li id="fn-concurrent">Several concurrent works derive variants of such a product-aware Muon step<sup class="cite"><a href="#ref-6">[6]</a><a href="#ref-7">[7]</a><a href="#ref-8">[8]</a><a href="#ref-9">[9]</a></sup>. <a class="fn-back" href="#fnref-concurrent" aria-label="Back to the text">↩</a></li>
+          <li id="fn-specnorm">The spectral norm \(\|\cdot\|_2\) of a matrix is its largest singular value. Applied to a vector, it denotes the \(\ell_2\)-norm. <a class="fn-back" href="#fnref-specnorm" aria-label="Back to the text">↩</a></li>
+          <li id="fn-scaleinvariant">The value of \(\tau\) only scales the direction, since \(\operatorname{msign}(cX)=\operatorname{msign}(X)\) for <span class="nobr">\(c>0\).</span> The update magnitude is set separately in the <a href="#magnitude">magnitude rule</a>, so we can absorb constants into <span class="nobr">\(\tau\).</span> <a class="fn-back" href="#fnref-scaleinvariant" aria-label="Back to the first mention">↩a</a> <a class="fn-back" href="#fnref-scaleinvariant2" aria-label="Back to the second mention">↩b</a></li>
+          <li id="fn-muonspecial">Setting \(P=I_{d_{\mathrm{out}}}\) and \(Q=I_{d_{\mathrm{in}}}\) recovers the Muon update. <a class="fn-back" href="#fnref-muonspecial" aria-label="Back to the text">↩</a></li>
+          <li id="fn-precond">We adapt the KL-Shampoo update<sup class="cite"><a href="#ref-15">[15]</a></sup>; see Appendix D of <a href="https://arxiv.org/abs/2607.17620" target="_blank" rel="noopener noreferrer">the paper</a> for the derivation. <a class="fn-back" href="#fnref-precond" aria-label="Back to the first mention">↩a</a> <a class="fn-back" href="#fnref-precond2" aria-label="Back to the second mention">↩b</a></li>
+          <li id="fn-cost">Spectral norms are estimated by warm-started power iteration. <a class="fn-back" href="#fnref-cost" aria-label="Back to the text">↩</a></li>
+          <li id="fn-binit">This actually diverges for the default initialization choice of <span class="nobr">\(B=0\).</span> <a class="fn-back" href="#fnref-binit" aria-label="Back to the text">↩</a></li>
+        </ol>
+      </section>
+      <section class="section" id="references">
+        <h2>References</h2>
+
+        <ol class="references">
+          <li id="ref-1">
+            <span class="ref-meta">Hu, E. J., Shen, Y., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W. (2022).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2106.09685" target="_blank" rel="noopener noreferrer">LoRA: Low-Rank Adaptation of Large Language Models</a>
+          </li>
+          <li id="ref-2">
+            <span class="ref-meta">Jordan, K., Jin, Y., Boza, V., You, J., Cesista, F., Newhouse, L., Bernstein, J. (2024).</span>
+            <a class="ref-title" href="https://kellerjordan.github.io/posts/muon/" target="_blank" rel="noopener noreferrer">Muon: An Optimizer for Hidden Layers in Neural Networks</a>
+          </li>
+          <li id="ref-3">
+            <span class="ref-meta">Kingma, D. P., Ba, J. (2015).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener noreferrer">Adam: A Method for Stochastic Optimization</a>
+          </li>
+          <li id="ref-4">
+            <span class="ref-meta">Pethick, T., Xie, W., Antonakopoulos, K., Zhu, Z., Silveti-Falls, A., Cevher, V. (2025). Introduces Scion; the LMO view of Muon-style updates.</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2502.07529" target="_blank" rel="noopener noreferrer">Training Deep Learning Models with Norm-Constrained LMOs</a>
+          </li>
+          <li id="ref-5">
+            <span class="ref-meta">Bernstein, J., Newhouse, L. (2024).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2410.21265" target="_blank" rel="noopener noreferrer">Modular Duality in Deep Learning</a>
+          </li>
+          <li id="ref-6">
+            <span class="ref-meta">Cesista, F. L., Crowson, K., Simal, C., Biderman, S. (2026).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2606.12921" target="_blank" rel="noopener noreferrer">LoRA-Muon: Spectral Steepest Descent on the Low-Rank Manifold</a>
+          </li>
+          <li id="ref-7">
+            <span class="ref-meta">Li, Y., Pandey, B. L., Sah, R., Han, A., Mostajeran, C., Jawanpuria, P., Mishra, B. (2026). The iMuon baseline.</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2605.09238" target="_blank" rel="noopener noreferrer">Intrinsic Muon: Spectral Optimization on Riemannian Matrix Manifolds</a>
+          </li>
+          <li id="ref-8">
+            <span class="ref-meta">Keigwin, B. et al., Tilde Research (2026).</span>
+            <a class="ref-title" href="https://blog.tilderesearch.com/blog/compositional-muon" target="_blank" rel="noopener noreferrer">Towards Compositional Steepest Descent</a>
+          </li>
+          <li id="ref-9">
+            <span class="ref-meta">Bogachev, A. et al. (2025).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2507.12142" target="_blank" rel="noopener noreferrer">LoRA meets Riemannion: Muon Optimizer for Parametrization-independent Low-Rank Adapters</a>
+          </li>
+          <li id="ref-10">
+            <span class="ref-meta">Yang, G., Simon, J. B., Bernstein, J. (2023).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2310.17813" target="_blank" rel="noopener noreferrer">A Spectral Condition for Feature Learning</a>
+          </li>
+          <li id="ref-11">
+            <span class="ref-meta">Martens, J., Grosse, R. (2015).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/1503.05671" target="_blank" rel="noopener noreferrer">Optimizing Neural Networks with Kronecker-factored Approximate Curvature</a>
+          </li>
+          <li id="ref-12">
+            <span class="ref-meta">Gupta, V., Koren, T., Singer, Y. (2018).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/1802.09568" target="_blank" rel="noopener noreferrer">Shampoo: Preconditioned Stochastic Tensor Optimization</a>
+          </li>
+          <li id="ref-13">
+            <span class="ref-meta">Vyas, N., Morwani, D., Zhao, R., Shapira, I., Brandfonbrener, D., Janson, L., Kakade, S. (2024).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2409.11321" target="_blank" rel="noopener noreferrer">SOAP: Improving and Stabilizing Shampoo using Adam</a>
+          </li>
+          <li id="ref-14">
+            <span class="ref-meta">Carlson, D., Collins, E., Hsieh, Y.-P., Carin, L., Cevher, V. (2015). See also Stochastic Spectral Descent for Restricted Boltzmann Machines, AISTATS (2015).</span>
+            <a class="ref-title" href="https://papers.nips.cc/paper/5795-preconditioned-spectral-descent-for-deep-learning" target="_blank" rel="noopener noreferrer">Preconditioned Spectral Descent for Deep Learning</a>
+          </li>
+          <li id="ref-15">
+            <span class="ref-meta">Lin, W., Lowe, S. C., Dangel, F., Eschenhagen, R., Xu, Z., Grosse, R. B. (2025). Introduces KL-Shampoo.</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2509.03378" target="_blank" rel="noopener noreferrer">Understanding and Improving Shampoo and SOAP via Kullback–Leibler Minimization</a>
+          </li>
+          <li id="ref-16">
+            <span class="ref-meta">Zhang, T. et al. (2026).</span>
+            <a class="ref-title" href="https://tridao.me/blog/2026/gram-newton-schulz/" target="_blank" rel="noopener noreferrer">Gram Newton–Schulz: A Fast, Hardware-Aware Newton–Schulz Algorithm for Muon</a>
+          </li>
+          <li id="ref-17">
+            <span class="ref-meta">Amsel, N., Persson, D., Musco, C., Gower, R. M. (2025).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2505.16932" target="_blank" rel="noopener noreferrer">The Polar Express: Optimal Matrix Sign Methods and Their Application to the Muon Algorithm</a>
+          </li>
+          <li id="ref-18">
+            <span class="ref-meta">OLMo Team (2025).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2501.00656" target="_blank" rel="noopener noreferrer">2 OLMo 2 Furious</a>
+          </li>
+          <li id="ref-19">
+            <span class="ref-meta">Grattafiori, A. et al. (2024).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2407.21783" target="_blank" rel="noopener noreferrer">The Llama 3 Herd of Models</a>
+          </li>
+          <li id="ref-20">
+            <span class="ref-meta">Yang, A. et al. (2024).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2412.15115" target="_blank" rel="noopener noreferrer">Qwen2.5 Technical Report</a>
+          </li>
+          <li id="ref-21">
+            <span class="ref-meta">Yen, J.-N., Si, S., Li, Z., Yu, F., Wang, Y., Kumar, S. (2025).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2410.20625" target="_blank" rel="noopener noreferrer">LoRA Done RITE: Robust Invariant Transformation Equilibration for LoRA Optimization</a>
+          </li>
+          <li id="ref-22">
+            <span class="ref-meta">Huang, S., Cheng, T. et al. (2024).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2411.04905" target="_blank" rel="noopener noreferrer">OpenCoder: The Open Cookbook for Top-Tier Code Large Language Models</a>
+          </li>
+          <li id="ref-23">
+            <span class="ref-meta">Toshniwal, S., Du, W., Moshkov, I., Kisacanin, B., Ayrapetyan, A., Gitman, I. (2024).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2410.01560" target="_blank" rel="noopener noreferrer">OpenMathInstruct-2: Accelerating AI for Math with Massive Open-Source Instruction Data</a>
+          </li>
+          <li id="ref-24">
+            <span class="ref-meta">Singh, S. et al. (2024).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2402.06619" target="_blank" rel="noopener noreferrer">Aya Dataset: An Open-Access Collection for Multilingual Instruction Tuning</a>
+          </li>
+          <li id="ref-25">
+            <span class="ref-meta">Kalajdzievski, D. (2023).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2312.03732" target="_blank" rel="noopener noreferrer">A Rank Stabilization Scaling Factor for Fine-Tuning with LoRA</a>
+          </li>
+          <li id="ref-26">
+            <span class="ref-meta">Biderman, D., Portes, J., Gonzalez Ortiz, J. J., Paul, M., Greengard, P., Jennings, C., King, D., Havens, S., Chiley, V., Frankle, J., Blakeney, C., Cunningham, J. P. (2024).</span>
+            <a class="ref-title" href="https://arxiv.org/abs/2405.09673" target="_blank" rel="noopener noreferrer">LoRA Learns Less and Forgets Less</a>
+          </li>
+          <li id="ref-27">
+            <span class="ref-meta">Raschka, S. (2023).</span>
+            <a class="ref-title" href="https://magazine.sebastianraschka.com/p/practical-tips-for-finetuning-llms" target="_blank" rel="noopener noreferrer">Practical Tips for Finetuning LLMs Using LoRA</a>
+          </li>
+        </ol>
+      </section>
+      <section class="section" id="cite">
+        <h2>Citing this work</h2>
+        <pre id="bibtex" class="citation-block">@misc{ghosh2026polora,
+  title         = {PoLoRA: A Preconditioned Orthogonalized LoRA Optimizer},
+  author        = {Ghosh, Nikhil and Parshakova, Tetiana and Gower, Robert M.},
+  year          = {2026},
+  eprint        = {2607.17620},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.LG}
+}</pre>
+
+        <p>The implementation is available at <a href="https://github.com/nikhilgsh/polora" target="_blank" rel="noopener noreferrer">github.com/nikhilgsh/polora</a>, and the preprint at <a href="https://arxiv.org/abs/2607.17620" target="_blank" rel="noopener noreferrer">arXiv:2607.17620</a>.</p>
+      </section>
+    </article>
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <div>
+        <h2>PoLoRA</h2>
+        <div class="footer-links">
+          <a href="https://arxiv.org/abs/2607.17620" target="_blank" rel="noopener noreferrer">Paper</a>
+          <a href="https://github.com/nikhilgsh/polora" target="_blank" rel="noopener noreferrer">Code</a>
+          <a href="#cite">How to cite</a>
+          <a href="#top">Back to top ↑</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var root = document.documentElement;
+      var button = document.getElementById("theme-toggle");
+      if (!button) return;
+
+      function sync() {
+        var dark = root.getAttribute("data-theme") === "dark";
+        button.setAttribute("aria-pressed", String(dark));
+        button.setAttribute(
+          "aria-label",
+          dark ? "Switch to light mode" : "Switch to dark mode"
+        );
+      }
+
+      button.addEventListener("click", function () {
+        var dark = root.getAttribute("data-theme") === "dark";
+        if (dark) root.removeAttribute("data-theme");
+        else root.setAttribute("data-theme", "dark");
+        try {
+          localStorage.setItem("theme", dark ? "light" : "dark");
+        } catch (e) {}
+        sync();
+      });
+
+      sync();
+    })();
+  </script>
+
+  <script>
+    (function () {
+      var side = document.getElementById("side-outline");
+      if (!side) return;
+
+      // The outline is authored in markup now, so there is nothing to build --
+      // this only pairs each in-page link with the element it points at, for
+      // the current-section highlight below.
+      var bySection = [];
+      side.querySelectorAll('a[href^="#"]').forEach(function (link) {
+        var el = document.getElementById(link.getAttribute("href").slice(1));
+        if (el) bySection.push({ el: el, link: link });
+      });
+      if (!bySection.length) return;
+
+      var observer = new IntersectionObserver(
+        function (entries) {
+          entries.forEach(function (entry) {
+            var match = bySection.find(function (s) { return s.el === entry.target; });
+            if (!match) return;
+            if (entry.isIntersecting) {
+              bySection.forEach(function (s) { s.link.classList.remove("active"); });
+              match.link.classList.add("active");
+            }
+          });
+        },
+        { rootMargin: "-15% 0px -70% 0px" }
+      );
+      bySection.forEach(function (s) { observer.observe(s.el); });
+
+      // No reveal-on-scroll any more: the outline is on screen from the top of
+      // the page down. CSS alone decides whether the current window is wide
+      // enough to show it as a pane or falls back to the button's panel (see
+      // the "HOW THE OUTLINE FOLLOWS THE READER" block in styles.css).
+      var fab = document.getElementById("outline-fab");
+
+      if (fab) {
+        fab.addEventListener("click", function () {
+          var open = side.classList.toggle("open");
+          fab.setAttribute("aria-expanded", String(open));
+        });
+        // Picking a destination closes the panel, so the reader lands on the
+        // section rather than on the panel covering it.
+        side.addEventListener("click", function (e) {
+          if (e.target.closest("a")) {
+            side.classList.remove("open");
+            fab.setAttribute("aria-expanded", "false");
+          }
+        });
+      }
+    })();
+  </script>
+
+  <script>
+    (function () {
+      // Back-links for the references list, mirroring the footnotes list's
+      // existing "back to text" arrows. A reference can be cited more than
+      // once, so this links back to the first citing location only.
+      var seen = {};
+      document.querySelectorAll('sup.cite a[href^="#ref-"]').forEach(function (marker) {
+        var refId = marker.getAttribute("href").slice(1);
+        if (seen[refId]) return;
+        seen[refId] = true;
+
+        var sup = marker.closest("sup");
+        var li = document.getElementById(refId);
+        if (!sup || !li) return;
+
+        var anchorId = "citeref-" + refId;
+        sup.id = anchorId;
+
+        var back = document.createElement("a");
+        back.className = "fn-back";
+        back.href = "#" + anchorId;
+        back.setAttribute("aria-label", "Back to the text");
+        back.textContent = "↩";
+        li.appendChild(document.createTextNode(" "));
+        li.appendChild(back);
+      });
+    })();
+  </script>
+</body>
+</html>
