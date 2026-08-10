@@ -14,7 +14,8 @@
       "Bash(cp /Users/tparshakova/Documents/projects/polora_website/index.html polora/index.html)",
       "Bash(cp /Users/tparshakova/Documents/projects/polora_website/assets/*.svg polora/assets/)",
       "Bash(shasum polora/index.html /Users/tparshakova/Documents/projects/polora_website/index.html)",
-      "Bash(shasum _site/polora/index.html polora/index.html)"
+      "Bash(shasum _site/polora/index.html polora/index.html)",
+      "Bash(git diff *)"
     ]
   }
 }

@@ -672,6 +672,30 @@
       -webkit-overflow-scrolling: touch;
     }
 
+    /* A display equation is otherwise bounded by the prose measure, which is a
+       fixed reading width rather than a share of the window: an equation wider
+       than it scrolls sideways on every screen alike, and enlarging the window
+       only adds margin beside the box instead of room inside it.
+
+       So the box takes the equation's own width, floored at the measure and
+       capped at the window. Narrow equations keep the measure and are
+       unchanged -- which matters because MathJax right-aligns the equation
+       number against the box, so a box wider than it needs strands the number
+       away from the equation. Wide ones grow only as far as they must, and
+       only an equation wider than the screen still scrolls.
+
+       Centred with left/transform rather than auto margins, which do not
+       centre a box wider than its parent. Equations inside a card are
+       excluded -- their width is the card's business, not the measure's. */
+    .section > .math-scroll {
+      width: max-content;
+      min-width: 100%;
+      max-width: calc(100vw - 2rem);
+      position: relative;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
     .math-scroll mjx-container { min-width: max-content; }
 
     /* MathJax gives display equations their own ~1.2em margin, which

@@ -493,9 +493,26 @@ blockquote {
     }
   }
 
-  .grid-sizer, .grid-item {
-    width: 250px;
-    margin-bottom: 10px;
+  // CSS grid instead of Masonry: the layout is correct on first paint, so the
+  // cards never stack in one column and then jump into place.
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .grid-sizer {
+    display: none;
+  }
+
+  .grid-item {
+    width: auto;
+    margin-bottom: 0;
+
+    // even bottoms within a row, whatever the description length
+    .card {
+      height: 100%;
+    }
   }
 
   h2.category {
