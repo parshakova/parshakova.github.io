@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="176pt" height="176.71pt" viewBox="0 0 176 176.71"><title>SoftServe on the RNN Adding task</title><desc>Training objective versus gradient evaluations. Legend: SoftServe-Kron, SoftServe-Diag, SoftServe-I, Adam, Muon, SOAP.</desc><defs>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="176pt" height="149.71pt" viewBox="0 0 176 149.71"><title>SoftServe on the RNN Adding task</title><desc>Training objective versus gradient evaluations. Legend: SoftServe-Kron, SoftServe-Diag, SoftServe-I, Adam, Muon, SOAP.</desc><defs>
 <clipPath id="clip_0">
 <path transform="matrix(.1,0,0,-.1,0,176.71)" d="M0 8.08203H5205.67V1759.042H0Z" />
 </clipPath>
@@ -620,7 +620,7 @@
 <path id="font_3_26" d="M.20199585 .29107667C.22799683 .28907777 .24499512 .28808595 .2709961 .28808595 .34899903 .28808595 .40299989 .29808045 .44599916 .32208253 .5059967 .3540802 .5419922 .41508485 .5419922 .48109437 .5419922 .52308657 .5279999 .5610962 .5009918 .59010317 .46099855 .63409426 .37399293 .6621094 .27999879 .6621094H.015991211V.6430969C.08999634 .6351013 .099990848 .6251068 .099990848 .5530853V.120010379C.099990848 .035995485 .09199524 .026000977 .015991211 .018997193V0H.29599V.018997193C.21699524 .021987915 .20199585 .035995485 .20199585 .10900879V.29107667M.20199585 .591095C.20199585 .618103 .20899964 .6251068 .23599243 .6251068 .37098695 .6251068 .43299867 .5780945 .43299867 .4750824 .43299867 .37808229 .37399293 .32807923 .25898744 .32807923 .23899842 .32807923 .22499085 .32907105 .20199585 .3310852V.591095Z" />
 <path id="font_3_5" d="M.6199951 .4499359 .61099246 .67578127H.58999636C.58399966 .6547699 .56799319 .6427765 .5479889 .6427765 .5389862 .6427765 .5239868 .6457672 .5089874 .6517792 .45999146 .6677704 .4099884 .67578127 .36299134 .67578127 .2809906 .67578127 .19799805 .6447754 .13598633 .58981326 .06599426 .52786257 .027999878 .43495179 .027999878 .32505799 .027999878 .23213196 .057998659 .14620972 .10899353 .089263919 .16899109 .02432251 .26098634-.013671875 .3600006-.013671875 .47299195-.013671875 .57199099 .032318117 .6329956 .11325073L.61499026 .13122559C.54100039 .060287477 .47499085 .030319214 .3919983 .030319214 .32899476 .030319214 .272995 .050308229 .22999573 .088272098 .1749878 .13722229 .14399719 .22714234 .14399719 .3380432 .14399719 .5188751 .23699951 .6357727 .38198854 .6357727 .43899537 .6357727 .4909973 .61479189 .5309906 .5748291 .5629883 .54286196 .5779877 .5148773 .5970001 .4499359H.6199951Z" />
 </defs>
-<g id="softserve-rnn-panel"><g clip-path="url(#clip_0)">
+<g id="softserve-rnn-panel" transform="translate(0,-24)"><g clip-path="url(#clip_0)">
 <path transform="matrix(.1,0,0,-.1,0,176.71)" d="M0 8.08203H5205.67V1759.04H0V8.08203" fill="#ffffff" />
 <path transform="matrix(.1,0,0,-.1,0,176.71)" d="M376.773 292.078H1712.13V1247.77H376.773V292.078" fill="#ffffff" />
 </g>
@@ -674,7 +674,7 @@
 <path transform="matrix(.1,0,0,-.1,0,176.71)" stroke-width="8.008" stroke-linecap="butt" stroke-linejoin="round" fill="none" stroke="#000000" d="M1651.43 292.078V257.039" />
 <use data-text="4" xlink:href="#font_3_43" transform="matrix(6.98077,0,0,-6.98077,161.65,159.26941)" />
 <use data-text="0" xlink:href="#font_3_39" transform="matrix(6.98077,0,0,-6.98077,165.14038,159.26941)" />
-<use data-text="G" xlink:href="#font_3_10" transform="matrix(7.97807,0,0,-7.97807,58.25199,171.9792)" />
+<g id="softserve-x-label" transform="translate(0,-3)"><use data-text="G" xlink:href="#font_3_10" transform="matrix(7.97807,0,0,-7.97807,58.25199,171.9792)" />
 <use data-text="r" xlink:href="#font_3_7" transform="matrix(7.97807,0,0,-7.97807,64.01216,171.9792)" />
 <use data-text="a" xlink:href="#font_3_15" transform="matrix(7.97807,0,0,-7.97807,66.66886,171.9792)" />
 <use data-text="d" xlink:href="#font_3_21" transform="matrix(7.97807,0,0,-7.97807,70.21113,171.9792)" />
@@ -699,7 +699,7 @@
 <use data-text="0" xlink:href="#font_13_1" transform="matrix(7.97807,0,0,-7.97807,139.58452,171.9792)" />
 <use data-text="3" xlink:href="#font_14_1" transform="matrix(5.98358,0,0,-5.98358,143.82349,168.66477)" />
 <use data-text=")" xlink:href="#font_3_47" transform="matrix(7.97807,0,0,-7.97807,147.97856,171.9792)" />
-</g>
+</g></g>
 <g clip-path="url(#clip_15)">
 <path transform="matrix(.1,0,0,-.1,0,176.71)" stroke-width="5.5055" stroke-linecap="square" stroke-linejoin="round" fill="none" stroke="#b0b0b0" stroke-opacity=".18" d="M376.773 390.152H1712.13" />
 </g>
@@ -1157,15 +1157,6 @@
 <use data-text="l" xlink:href="#font_3_34" transform="matrix(6.48218,0,0,-6.48218,160.61942,65.91201)" fill="#8064a2" />
 <use data-text="e" xlink:href="#font_3_23" transform="matrix(6.48218,0,0,-6.48218,162.42147,65.91201)" fill="#8064a2" />
 <use data-text="d" xlink:href="#font_3_21" transform="matrix(6.48218,0,0,-6.48218,165.29955,65.91201)" fill="#8064a2" />
-<use data-text="R" xlink:href="#font_3_29" transform="matrix(8.47667,0,0,-8.47667,81.7215,45.929)" />
-<use data-text="N" xlink:href="#font_3_22" transform="matrix(8.47667,0,0,-8.47667,87.375438,45.929)" />
-<use data-text="N" xlink:href="#font_3_22" transform="matrix(8.47667,0,0,-8.47667,93.49559,45.929)" />
-<use data-text="A" xlink:href="#font_3_1" transform="matrix(8.47667,0,0,-8.47667,101.73479,45.929)" />
-<use data-text="d" xlink:href="#font_3_21" transform="matrix(8.47667,0,0,-8.47667,107.85494,45.929)" />
-<use data-text="d" xlink:href="#font_3_21" transform="matrix(8.47667,0,0,-8.47667,112.09328,45.929)" />
-<use data-text="i" xlink:href="#font_3_30" transform="matrix(8.47667,0,0,-8.47667,116.33161,45.929)" />
-<use data-text="n" xlink:href="#font_3_2" transform="matrix(8.47667,0,0,-8.47667,118.688129,45.929)" />
-<use data-text="g" xlink:href="#font_3_27" transform="matrix(8.47667,0,0,-8.47667,122.92646,45.929)" />
 <path transform="matrix(.1,0,0,-.1,0,176.71)" d="M2112.73 292.078H3448.09V1247.77H2112.73V292.078" fill="#ffffff" />
 </g>
 </g><g id="softserve-legend" transform="translate(-116.7,0)"><path transform="matrix(.1,0,0,-.1,0,176.71)" stroke-width="15.5157" stroke-linecap="square" stroke-linejoin="round" fill="none" stroke="#d55e00" d="M1190.47 1684.88H1358.65" />
